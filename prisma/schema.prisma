@@ -1,0 +1,556 @@
+generator client {
+  provider = "prisma-client-js"
+  // Generated into the project rather than node_modules so editors track the
+  // types like any other source file. Regenerating inside node_modules leaves
+  // the TypeScript server holding a stale copy after every migration.
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/// Company identity shown across the portal and printed on receipts.
+/// A singleton: always read and written at id = 1.
+model CompanyProfile {
+  id          Int      @id @default(1)
+  /// Legal entity name, e.g. "MIK Finance Pvt Ltd".
+  name        String
+  /// Short brand name used in the sidebar and page chrome, e.g. "ChitAdmin".
+  shortName   String
+  regNo       String?
+  gst         String?
+  phone       String?
+  email       String?
+  website     String?
+  addressLine String?
+  city        String?
+  state       String?
+  pincode     String?
+  /// Logo as a data URI. Held in the database rather than on disk so it
+  /// survives redeploys and needs no file storage; capped at ~256KB.
+  logo        String?
+  updatedAt   DateTime @updatedAt
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  CHIT_ADMIN
+  USER
+}
+
+enum CustomerStatus {
+  active
+  inactive
+}
+
+enum KycStatus {
+  verified
+  pending
+  rejected
+}
+
+enum EmployeeRole {
+  Manager
+  Agent
+  Accountant
+  Supervisor
+}
+
+enum CollectionMode {
+  cash
+  online
+  cheque
+}
+
+enum CollectionStatus {
+  paid
+  pending
+  overdue
+}
+
+enum GroupStatus {
+  active
+  completed
+  upcoming
+}
+
+enum CollectionType {
+  daily
+  weekly
+  monthly
+}
+
+enum AuctionStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum TicketStatus {
+  active
+  suspended
+  closed
+}
+
+enum ApplicantStatus {
+  pending
+  allocated
+  approved
+  rejected
+}
+
+model User {
+  id           Int       @id @default(autoincrement())
+  username     String    @unique
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole  @default(USER)
+  /// Branch scope. For CHIT_ADMIN, the branches they may act on. For USER, the
+  /// branches they belong to, which is what lets a Chit Admin manage them.
+  /// Always empty for SUPER_ADMIN, who is unscoped and sees everything.
+  branches     String[]  @default([])
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  routesCreated Route[]
+  denominationsCounted CashDenomination[]
+  intervalsUpdated     ChitInterval[]
+
+  @@index([role])
+}
+
+enum SessionKind {
+  /// Browser session: identity carried in an httpOnly cookie.
+  web
+  /// Mobile session: short-lived bearer access token plus a rotating refresh token.
+  mobile
+}
+
+/// One login. Both auth styles resolve to a row here, so revoking a session
+/// logs the user out whichever client created it.
+model Session {
+  id        String      @id
+  userId    Int
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind      SessionKind @default(web)
+  /// When the access path stops working: cookie expiry, or access-token expiry
+  /// for mobile (where the refresh token outlives it).
+  expiresAt DateTime
+  /// SHA-256 of the refresh token. The raw value is returned once, at issue.
+  /// Rotated on every refresh, so a replayed token no longer matches.
+  refreshTokenHash String?  @unique
+  refreshExpiresAt DateTime?
+  lastUsedAt       DateTime?
+  createdAt DateTime    @default(now())
+  userAgent String?
+  ip        String?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@index([refreshExpiresAt])
+}
+
+model Customer {
+  id          Int            @id @default(autoincrement())
+  name        String
+  phone       String
+  email       String
+  address     String
+  groups      String[]
+  pendingDue  Int            @default(0)
+  totalPaid   Int            @default(0)
+  joinedDate  String
+  status      CustomerStatus @default(active)
+  kycStatus   KycStatus      @default(pending)
+  collections Collection[]
+}
+
+model Employee {
+  id         Int            @id @default(autoincrement())
+  name       String
+  role       EmployeeRole
+  branch     String
+  phone      String
+  email      String
+  target     Int            @default(0)
+  collected  Int            @default(0)
+  joinedDate String
+  status     CustomerStatus @default(active)
+  applicants Applicant[]
+
+  routeExecutives  RouteExecutive[]
+  routesAsIncharge Route[]          @relation("RouteIncharge")
+}
+
+/// A collection round: the areas one team covers, and who covers them.
+/// Managed under Settings → Routes.
+model Route {
+  id     Int     @id @default(autoincrement())
+  /// Short reference shown in listings, e.g. "R10".
+  code   String  @unique
+  name   String
+  /// Owning branch, so routes scope the same way as everything else.
+  branch String
+  /// Places the round covers — the "Details" column in the listing.
+  areas  String[] @default([])
+  notes  String?
+  isActive Boolean @default(true)
+
+  /// Any number of field executives, ordered for display. A join table rather
+  /// than fixed columns so a route is not capped at two.
+  executives RouteExecutive[]
+
+  /// One supervising incharge. Optional so a route can exist before staffing
+  /// is decided; SetNull keeps the route if the employee record is removed.
+  inchargeId Int?
+  incharge   Employee? @relation("RouteIncharge", fields: [inchargeId], references: [id], onDelete: SetNull)
+
+  createdById Int?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tickets ChitTicket[]
+  denominations CashDenomination[]
+  dues    TicketDue[]
+
+  @@index([branch])
+  @@index([isActive])
+}
+
+/// One month's auction for one group: when it is held, who took the pot, and
+/// at what discount. The dividend each member earns follows from the discount.
+model Auction {
+  id            Int           @id @default(autoincrement())
+  groupId       Int
+  group         ChitGroup     @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// The instalment this auction settles — the "due no" on the register.
+  installmentNo Int
+  auctionDate   DateTime
+  /// Scheduled slot, kept as "HH:mm" because it is a wall-clock time rather
+  /// than an instant: branches run their auctions at a fixed local hour.
+  auctionTime   String        @default("10:00")
+
+  /// Null until the auction is held.
+  winnerTicketId Int?
+  winnerTicket   ChitTicket?  @relation("AuctionWinner", fields: [winnerTicketId], references: [id], onDelete: SetNull)
+
+  /// What the winner takes, after the discount they bid.
+  prizeAmount   Int           @default(0)
+  discount      Int           @default(0)
+  /// Each member's share of the discount, net of the foreman's commission.
+  dividend      Int           @default(0)
+
+  status        AuctionStatus @default(scheduled)
+
+  /// Who turned up to bid this round.
+  hall          AuctionHallEntry[]
+
+  @@unique([groupId, installmentNo])
+  /// A seat takes the pot once and once only. Postgres treats NULLs as
+  /// distinct, so any number of rounds can sit unheld under this constraint.
+  @@unique([groupId, winnerTicketId])
+  @@index([auctionDate])
+  @@index([status])
+}
+
+/// A seat put down for one round's auction: the members of the group assigned
+/// to that month's hall. It records attendance for the round, nothing more —
+/// the result is held on the Auction row itself.
+model AuctionHallEntry {
+  id        Int        @id @default(autoincrement())
+  auctionId Int
+  auction   Auction    @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  ticketId  Int
+  ticket    ChitTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  addedAt   DateTime   @default(now())
+
+  /// A seat is assigned to a round once.
+  @@unique([auctionId, ticketId])
+  @@index([ticketId])
+}
+
+/// One scheduled instalment for one seat. The dues register reads from here:
+/// what is owed each month, and how much of it has come in.
+model TicketDue {
+  id            Int        @id @default(autoincrement())
+  ticketId      Int
+  ticket        ChitTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  /// 1-based month of the chit.
+  installmentNo Int
+  dueDate       DateTime
+  /// Varies month to month: the auction discount is shared out, so a fixed
+  /// value/duration split would be wrong.
+  amountDue     Int
+  amountPaid    Int        @default(0)
+  /// The pot taken at this month's auction, and the dividend each member's
+  /// share of the discount buys them. Both are shown on the member statement.
+  prizeAmount   Int        @default(0)
+  dividend      Int        @default(0)
+  paidOn        DateTime?
+  /// Route the month's money was collected on. Defaults to the seat's route
+  /// but is kept per month, since a member can move rounds mid-chit.
+  routeId       Int?
+  route         Route?     @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  updatedAt     DateTime   @default(now()) @updatedAt
+  /// The chit interval whose schedule set `amountDue`, when one did. Kept so
+  /// a seat's ledger can be traced back to the scheme it was built from.
+  intervalId    Int?
+  interval      ChitInterval? @relation(fields: [intervalId], references: [id], onDelete: SetNull)
+
+  @@unique([ticketId, installmentNo])
+  @@index([dueDate])
+  @@index([routeId])
+}
+
+/// Executives assigned to a route. Rows are replaced wholesale when a route is
+/// saved, so `position` only fixes display order.
+model RouteExecutive {
+  id         Int      @id @default(autoincrement())
+  routeId    Int
+  route      Route    @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  employeeId Int
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  position   Int      @default(0)
+
+  /// The same person must not be listed twice on one route.
+  @@unique([routeId, employeeId])
+  @@index([routeId])
+}
+
+/// A prospective subscriber working through enrolment, before they become a
+/// paying Customer. Captured by the form at /home/applicants/new.
+model Applicant {
+  id            Int             @id @default(autoincrement())
+  /// Human-facing reference, e.g. APP-2026-0001. Assigned on create.
+  applicantCode String          @unique
+  branch        String
+
+  // Applicant details
+  firstName     String
+  lastName      String
+  mobile        String
+  dateOfBirth   DateTime?
+  gender        String?
+  maritalStatus String?
+  signDate      DateTime?
+  /// Mandatory KYC identifier. Defaulted at the column level so the migration
+  /// could run against existing rows; emptiness is rejected by validation.
+  aadhaarNumber String              @default("")
+  /// Any further proofs collected — PAN, voter ID, passport and so on.
+  documents     ApplicantDocument[]
+
+  // Communication details
+  email         String?
+  altPhone      String?
+  addressLine1  String?
+  addressLine2  String?
+  area          String?
+  city          String?
+  state         String?
+  pincode       String?
+  permanentAddress String?
+
+  // Occupation details
+  occupationType   String?
+  employerName     String?
+  natureOfBusiness String?
+  annualIncome     Int?
+  yearsInOccupation Int?
+
+  // Introducer and nominee
+  introducerName  String?
+  introducerId    String?
+  nomineeName     String?
+  nomineeRelation String?
+  nomineeDob      DateTime?
+  nomineeMobile   String?
+
+  /// Chit value the applicant is enrolling for, in rupees.
+  chitValue     Int             @default(0)
+  status        ApplicantStatus @default(pending)
+  /// Whether KYC documents have been collected. File storage is not wired yet.
+  documentsUploaded Boolean     @default(false)
+
+  assignedToId  Int?
+  assignedTo    Employee?       @relation(fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tickets       ChitTicket[]
+
+  @@index([branch])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// One identity proof beyond the mandatory Aadhaar. Rows are replaced wholesale
+/// when an applicant is edited, so there is no natural key beyond the id.
+model ApplicantDocument {
+  id          Int       @id @default(autoincrement())
+  applicantId Int
+  applicant   Applicant @relation(fields: [applicantId], references: [id], onDelete: Cascade)
+  docType     String
+  docNumber   String
+
+  @@index([applicantId])
+}
+
+model Collection {
+  id           Int              @id @default(autoincrement())
+  receiptNo    String           @unique
+  customerId   Int
+  customer     Customer         @relation(fields: [customerId], references: [id])
+  customerName String
+  group        String
+  installment  Int
+  amount       Int
+  mode         CollectionMode
+  date         String
+  collectedBy  String
+  status       CollectionStatus
+  penalty      Int              @default(0)
+  /// When the receipt was written. `date` stays the business day it counts
+  /// towards; this supplies the time of day for the denomination report.
+  createdAt    DateTime         @default(now())
+
+  @@index([date])
+}
+
+/// The cash an executive hands in at the end of a collection day, counted
+/// note by note. The denomination report sets it against the cash receipts
+/// for the same day and route, so any shortage shows up before banking.
+model CashDenomination {
+  id       Int      @id @default(autoincrement())
+  /// Business day the cash belongs to.
+  date     DateTime @db.Date
+  branch   String
+  /// Null for receipts that could not be placed on a route.
+  routeId  Int?
+  route    Route?   @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  /// "<branch>|<routeId or ->". Postgres treats NULLs as distinct, so a
+  /// unique key over the nullable routeId would allow duplicate unrouted rows.
+  scopeKey String
+  /// Count of each note or coin, keyed by face value: { "500": 12, "200": 4 }.
+  counts   Json     @default("{}")
+  /// Sum of `counts`, stored so totals can be read without unpacking JSON.
+  total    Int      @default(0)
+  remarks  String?
+
+  countedById Int?
+  countedBy   User?  @relation(fields: [countedById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([date, scopeKey])
+  @@index([date])
+}
+
+model ChitGroup {
+  id          Int         @id @default(autoincrement())
+  branchName  String
+  specialType String
+  group       String
+  percentage  String
+  amount      Int
+  startDate   String
+  endDate     String
+  /// Seats in the group. members/vacants below are derived from the roster.
+  totalTickets Int        @default(20)
+  vacants     Int
+  members     Int
+  status      GroupStatus @default(active)
+  tickets     ChitTicket[]
+  auctions    Auction[]
+}
+
+/// One numbered seat in a chit group. A group of N members has N tickets;
+/// a ticket with no customer is vacant and can be assigned.
+model ChitTicket {
+  id         Int          @id @default(autoincrement())
+  groupId    Int
+  group      ChitGroup    @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  /// 1-based seat number, unique within the group.
+  ticketNo   Int
+
+  /// Null while the seat is vacant. Seats are filled from the applicant
+  /// register — an applicant becomes a member by taking a ticket.
+  applicantId Int?
+  applicant   Applicant?  @relation(fields: [applicantId], references: [id], onDelete: SetNull)
+  /// Collection round this seat is collected on. The executive and manager
+  /// shown at assignment time are read from the route, not copied here.
+  routeId    Int?
+  route      Route?       @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  collectionType CollectionType @default(monthly)
+
+  /// The foreman's own seat. Held by the company and never assignable.
+  isCompany  Boolean      @default(false)
+  status     TicketStatus @default(active)
+  assignedAt DateTime?
+
+  /// Whether this seat has already taken the pot. A prized member keeps paying
+  /// but can no longer bid, so the dues register calls it out.
+  isPrized   Boolean      @default(false)
+  prizedOn   DateTime?
+
+  dues       TicketDue[]
+  auctionsWon Auction[]   @relation("AuctionWinner")
+  hallEntries AuctionHallEntry[]
+
+  @@unique([groupId, ticketNo])
+  @@index([applicantId])
+}
+
+enum IntervalStatus {
+  active
+  inactive
+}
+
+/// The month-by-month collection schedule of a chit scheme: what every member
+/// pays each month, and what the month's prize pays out. Groups pick it up by
+/// their plan code (ChitGroup.percentage) and duration (ChitGroup.totalTickets).
+model ChitInterval {
+  id        Int            @id @default(autoincrement())
+  /// Plan code as groups carry it, e.g. "5L-25".
+  scheme    String
+  chitValue Int
+  /// Months in the schedule — one instalment, and one auction, per month.
+  months    Int
+  status    IntervalStatus @default(active)
+  notes     String?
+
+  rows ChitIntervalMonth[]
+  dues TicketDue[]
+
+  updatedById Int?
+  updatedBy   User?    @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  /// One schedule per scheme and duration.
+  @@unique([scheme, months])
+}
+
+/// One month of a chit interval.
+model ChitIntervalMonth {
+  id          Int          @id @default(autoincrement())
+  intervalId  Int
+  interval    ChitInterval @relation(fields: [intervalId], references: [id], onDelete: Cascade)
+  monthNo     Int
+  /// Collected from each member this month. The kasar (dividend) is the
+  /// monthly share less this, so it is derived rather than stored.
+  installment Int
+  /// Paid to the month's prize winner. Null for a month that pays no one,
+  /// such as the first month taken for registration.
+  payout      Int?
+
+  @@unique([intervalId, monthNo])
+}
