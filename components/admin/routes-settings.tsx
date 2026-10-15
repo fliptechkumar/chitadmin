@@ -203,6 +203,7 @@ export default function RoutesSettings() {
                   <TH>Executives</TH>
                   <TH>Incharge</TH>
                   <TH>Areas</TH>
+                  <TH>App login</TH>
                   <TH>Created</TH>
                   <TH>Status</TH>
                   <TH className="text-right">Actions</TH>
@@ -240,6 +241,11 @@ export default function RoutesSettings() {
                       <span className="line-clamp-1 text-xs">
                         {route.areas.join(", ")}
                       </span>
+                    </TD>
+                    <TD className="whitespace-nowrap font-mono text-xs">
+                      {route.login?.username ?? (
+                        <span className="font-sans text-muted-foreground">Not set</span>
+                      )}
                     </TD>
                     <TD className="whitespace-nowrap text-xs">
                       <span className="tnum">{formatDate(route.createdAt)}</span>

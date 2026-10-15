@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { authorizeApi } from "@/lib/auth-server"
 import { parseRouteInput } from "@/lib/route-schema"
 import { ROUTE_SELECT, serializeRoute } from "@/lib/route-select"
+import { prepareLogin, syncRouteLogin, usernameTaken } from "@/lib/route-login"
 
 /** Routes live under Settings, which is Super-Admin-only (see lib/rbac.ts). */
 const SUPER_ONLY = ["SUPER_ADMIN"] as const
@@ -36,37 +37,58 @@ export async function POST(request: Request) {
   // Deduplicated because the incharge may also be listed as an executive, and
   // the count below compares against the number of distinct rows.
   const staffIds = [
-    ...new Set([...input.executiveIds, ...(input.inchargeId ? [input.inchargeId] : [])]),
+    ...new Set([
+      ...input.executiveIds,
+      ...(input.inchargeId ? [input.inchargeId] : []),
+    ]),
   ]
   if (staffIds.length > 0) {
-    const found = await prisma.employee.count({ where: { id: { in: staffIds } } })
+    const found = await prisma.employee.count({
+      where: { id: { in: staffIds } },
+    })
     if (found !== staffIds.length) {
       return NextResponse.json(
-        { errors: { executiveIds: "One of the selected staff no longer exists" } },
+        {
+          errors: {
+            executiveIds: "One of the selected staff no longer exists",
+          },
+        },
         { status: 400 }
       )
     }
   }
 
+  const taken = await usernameTaken(input.username, null)
+  if (taken)
+    return NextResponse.json({ errors: { username: taken } }, { status: 409 })
+  const prepared = await prepareLogin(input)
+
   try {
-    const route = await prisma.route.create({
-      data: {
-        code: input.code,
-        name: input.name,
-        branch: input.branch,
-        areas: input.areas,
-        notes: input.notes || null,
-        isActive: input.isActive,
-        inchargeId: input.inchargeId,
-        createdById: auth.user.id,
-        executives: {
-          create: input.executiveIds.map((employeeId, position) => ({
-            employeeId,
-            position,
-          })),
+    const route = await prisma.$transaction(async (tx) => {
+      const created = await tx.route.create({
+        data: {
+          code: input.code,
+          name: input.name,
+          branch: input.branch,
+          areas: input.areas,
+          notes: input.notes || null,
+          isActive: input.isActive,
+          inchargeId: input.inchargeId,
+          createdById: auth.user.id,
+          executives: {
+            create: input.executiveIds.map((employeeId, position) => ({
+              employeeId,
+              position,
+            })),
+          },
         },
-      },
-      select: ROUTE_SELECT,
+        select: { id: true, code: true, name: true, loginUserId: true },
+      })
+      await syncRouteLogin(tx, created, input, prepared)
+      return tx.route.findUniqueOrThrow({
+        where: { id: created.id },
+        select: ROUTE_SELECT,
+      })
     })
 
     return NextResponse.json(serializeRoute(route), { status: 201 })

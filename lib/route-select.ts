@@ -15,6 +15,7 @@ export const ROUTE_SELECT = {
   updatedAt: true,
   incharge: { select: { id: true, name: true } },
   createdBy: { select: { id: true, name: true, username: true } },
+  loginUser: { select: { id: true, username: true, lastLoginAt: true } },
   executives: {
     select: { employee: { select: { id: true, name: true, branch: true } } },
     orderBy: { position: "asc" },
@@ -35,6 +36,13 @@ export function serializeRoute(row: RouteRow) {
     isActive: row.isActive,
     incharge: row.incharge,
     createdBy: row.createdBy,
+    /** The mobile-app sign-in, or null when the route has none. Never the hash. */
+    login: row.loginUser
+      ? {
+          username: row.loginUser.username,
+          lastLoginAt: row.loginUser.lastLoginAt?.toISOString() ?? null,
+        }
+      : null,
     executives: row.executives.map((e) => e.employee),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),

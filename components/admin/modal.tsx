@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { createPortal } from "react-dom"
 import { X } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -28,6 +29,9 @@ const EXIT_MS = 180
  * Minimal accessible dialog: backdrop click and Escape close it, the page
  * behind is scroll-locked, and focus moves into the panel on open. The panel
  * stays mounted for the length of the exit animation so closing is animated.
+ *
+ * Rendered into document.body: the page's reveal animations leave a transform
+ * on ancestor cards, which would otherwise trap this fixed overlay inside them.
  */
 export default function Modal({
   open,
@@ -68,9 +72,9 @@ export default function Modal({
     }
   }, [open, onClose])
 
-  if (!present) return null
+  if (!present || typeof document === "undefined") return null
 
-  return (
+  return createPortal(
     <div
       className={cn(
         "fixed inset-0 z-50 overflow-y-auto bg-foreground/30 backdrop-blur-sm",
@@ -129,6 +133,7 @@ export default function Modal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   )
 }

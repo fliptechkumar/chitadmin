@@ -7,7 +7,7 @@ import { canAccessBranch } from "@/lib/rbac"
 
 type Context = { params: Promise<{ id: string }> }
 
-const COLLECTOR_ROLES = ["SUPER_ADMIN", "CHIT_ADMIN"] as const
+const COLLECTOR_ROLES = ["SUPER_ADMIN", "CHIT_ADMIN", "ROUTE"] as const
 
 /**
  * GET /api/v1/collections/{id}/receipt

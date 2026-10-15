@@ -10,7 +10,8 @@ import { canAccessBranch } from "@/lib/rbac"
 import { parseCollectionInput } from "@/lib/collection-schema"
 import { todayDisplay } from "@/lib/format"
 
-const COLLECTOR_ROLES = ["SUPER_ADMIN", "CHIT_ADMIN"] as const
+/** Route logins collect on their own branch, like a Chit Admin. */
+const COLLECTOR_ROLES = ["SUPER_ADMIN", "CHIT_ADMIN", "ROUTE"] as const
 
 const LIST_SELECT = {
   id: true,

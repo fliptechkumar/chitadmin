@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { AlertCircle, Loader2, MapPin, Plus, X } from "lucide-react"
+import { AlertCircle, Eye, EyeOff, KeyRound, Loader2, MapPin, Plus, X } from "lucide-react"
 
 import Modal from "./modal"
 import { Badge } from "@/components/ui/badge"
@@ -23,6 +23,8 @@ export type RouteRecord = {
   isActive: boolean
   incharge: { id: number; name: string } | null
   createdBy: { id: number; name: string; username: string } | null
+  /** Mobile-app sign-in, or null when the route has none. */
+  login: { username: string; lastLoginAt: string | null } | null
   executives: { id: number; name: string; branch: string }[]
   createdAt: string
   updatedAt: string
@@ -37,6 +39,8 @@ type FormState = {
   inchargeId: string
   notes: string
   isActive: boolean
+  username: string
+  password: string
 }
 
 const EMPTY: FormState = {
@@ -48,6 +52,8 @@ const EMPTY: FormState = {
   inchargeId: "",
   notes: "",
   isActive: true,
+  username: "",
+  password: "",
 }
 
 export default function RouteFormModal({
@@ -70,6 +76,7 @@ export default function RouteFormModal({
   const [errors, setErrors] = useState<RouteErrors>({})
   const [submitting, setSubmitting] = useState(false)
   const [loadedFor, setLoadedFor] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   // Reset on open, derived during render so the first paint is already correct.
   const openKey = open ? String(editing?.id ?? "new") : null
@@ -78,6 +85,7 @@ export default function RouteFormModal({
     setLoadedFor(openKey)
     setErrors({})
     setAreaDraft("")
+    setShowPassword(false)
     setForm(
       editing
         ? {
@@ -89,6 +97,8 @@ export default function RouteFormModal({
             inchargeId: editing.incharge ? String(editing.incharge.id) : "",
             notes: editing.notes,
             isActive: editing.isActive,
+            username: editing.login?.username ?? "",
+            password: "",
           }
         : { ...EMPTY, branch: branches.length === 1 ? branches[0] : "" }
     )
@@ -324,6 +334,52 @@ export default function RouteFormModal({
           />
         </Field>
 
+        <div className="space-y-3 rounded-lg border border-border p-3.5">
+          <div className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-brand" />
+            <div>
+              <p className="text-sm font-medium">Mobile app login</p>
+              <p className="text-xs text-muted-foreground">
+                The route signs in to the mobile app with these. Clear the username to remove the login.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Username" error={errors.username}>
+              <Input
+                value={form.username}
+                onChange={(e) => set("username", e.target.value.toLowerCase())}
+                placeholder="route.r10"
+                autoComplete="off"
+              />
+            </Field>
+            <Field
+              label={editing?.login ? "New password" : "Password"}
+              error={errors.password}
+              hint={editing?.login ? "Leave blank to keep the current password" : "At least 8 characters, with a letter and a number"}
+            >
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) => set("password", e.target.value)}
+                  disabled={!form.username}
+                  autoComplete="new-password"
+                  className="pr-9"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </Field>
+          </div>
+        </div>
+
         <div className="flex items-center justify-between rounded-lg border border-border bg-surface-2 px-3.5 py-3">
           <div>
             <p className="text-sm font-medium">Route active</p>
@@ -415,6 +471,11 @@ export function RouteViewModal({
               data.executives.length
                 ? data.executives.map((e) => e.name).join(", ")
                 : "None assigned",
+            ],
+            ["Mobile login", data.login?.username ?? "Not set up"],
+            [
+              "Last app sign-in",
+              data.login?.lastLoginAt ? new Date(data.login.lastLoginAt).toLocaleString("en-IN") : "—",
             ],
             ["Created by", data.createdBy?.name ?? "—"],
             ["Created on", new Date(data.createdAt).toLocaleDateString("en-IN")],

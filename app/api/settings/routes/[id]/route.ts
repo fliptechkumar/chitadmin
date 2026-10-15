@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma"
 import { authorizeApi } from "@/lib/auth-server"
 import { parseRouteInput } from "@/lib/route-schema"
 import { ROUTE_SELECT, serializeRoute } from "@/lib/route-select"
+import { prepareLogin, syncRouteLogin, usernameTaken } from "@/lib/route-login"
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -20,10 +21,16 @@ export async function GET(_request: Request, { params }: Context) {
 
   const id = Number((await params).id)
   if (!Number.isInteger(id)) {
-    return NextResponse.json({ errors: { id: "Invalid route id" } }, { status: 400 })
+    return NextResponse.json(
+      { errors: { id: "Invalid route id" } },
+      { status: 400 }
+    )
   }
 
-  const route = await prisma.route.findUnique({ where: { id }, select: ROUTE_SELECT })
+  const route = await prisma.route.findUnique({
+    where: { id },
+    select: ROUTE_SELECT,
+  })
   if (!route) return notFound()
 
   return NextResponse.json(serializeRoute(route))
@@ -35,13 +42,22 @@ export async function PUT(request: Request, { params }: Context) {
 
   const id = Number((await params).id)
   if (!Number.isInteger(id)) {
-    return NextResponse.json({ errors: { id: "Invalid route id" } }, { status: 400 })
+    return NextResponse.json(
+      { errors: { id: "Invalid route id" } },
+      { status: 400 }
+    )
   }
 
-  const existing = await prisma.route.findUnique({ where: { id }, select: { id: true } })
+  const existing = await prisma.route.findUnique({
+    where: { id },
+    select: { id: true, loginUserId: true },
+  })
   if (!existing) return notFound()
 
-  const parsed = parseRouteInput(await request.json().catch(() => null))
+  const parsed = parseRouteInput(
+    await request.json().catch(() => null),
+    existing.loginUserId !== null
+  )
   if (!parsed.ok) {
     return NextResponse.json({ errors: parsed.errors }, { status: 400 })
   }
@@ -51,40 +67,58 @@ export async function PUT(request: Request, { params }: Context) {
   // Deduplicated: the incharge may also be listed as an executive, and the
   // count below compares against the number of distinct rows.
   const staffIds = [
-    ...new Set([...input.executiveIds, ...(input.inchargeId ? [input.inchargeId] : [])]),
+    ...new Set([
+      ...input.executiveIds,
+      ...(input.inchargeId ? [input.inchargeId] : []),
+    ]),
   ]
   if (staffIds.length > 0) {
-    const found = await prisma.employee.count({ where: { id: { in: staffIds } } })
+    const found = await prisma.employee.count({
+      where: { id: { in: staffIds } },
+    })
     if (found !== staffIds.length) {
       return NextResponse.json(
-        { errors: { executiveIds: "One of the selected staff no longer exists" } },
+        {
+          errors: {
+            executiveIds: "One of the selected staff no longer exists",
+          },
+        },
         { status: 400 }
       )
     }
   }
 
+  const taken = await usernameTaken(input.username, existing.loginUserId)
+  if (taken)
+    return NextResponse.json({ errors: { username: taken } }, { status: 409 })
+  const prepared = await prepareLogin(input)
+
   try {
-    const route = await prisma.route.update({
-      where: { id },
-      data: {
-        code: input.code,
-        name: input.name,
-        branch: input.branch,
-        areas: input.areas,
-        notes: input.notes || null,
-        isActive: input.isActive,
-        inchargeId: input.inchargeId,
-        // Replaced wholesale: simpler than diffing, and the join rows carry no
-        // state of their own beyond display order.
-        executives: {
-          deleteMany: {},
-          create: input.executiveIds.map((employeeId, position) => ({
-            employeeId,
-            position,
-          })),
+    const route = await prisma.$transaction(async (tx) => {
+      const updated = await tx.route.update({
+        where: { id },
+        data: {
+          code: input.code,
+          name: input.name,
+          branch: input.branch,
+          areas: input.areas,
+          notes: input.notes || null,
+          isActive: input.isActive,
+          inchargeId: input.inchargeId,
+          // Replaced wholesale: simpler than diffing, and the join rows carry no
+          // state of their own beyond display order.
+          executives: {
+            deleteMany: {},
+            create: input.executiveIds.map((employeeId, position) => ({
+              employeeId,
+              position,
+            })),
+          },
         },
-      },
-      select: ROUTE_SELECT,
+        select: { id: true, code: true, name: true, loginUserId: true },
+      })
+      await syncRouteLogin(tx, updated, input, prepared)
+      return tx.route.findUniqueOrThrow({ where: { id }, select: ROUTE_SELECT })
     })
 
     return NextResponse.json(serializeRoute(route))
@@ -108,13 +142,25 @@ export async function DELETE(_request: Request, { params }: Context) {
 
   const id = Number((await params).id)
   if (!Number.isInteger(id)) {
-    return NextResponse.json({ errors: { id: "Invalid route id" } }, { status: 400 })
+    return NextResponse.json(
+      { errors: { id: "Invalid route id" } },
+      { status: 400 }
+    )
   }
 
-  const existing = await prisma.route.findUnique({ where: { id }, select: { id: true } })
+  const existing = await prisma.route.findUnique({
+    where: { id },
+    select: { id: true, loginUserId: true },
+  })
   if (!existing) return notFound()
 
-  // Executive rows cascade with the route.
-  await prisma.route.delete({ where: { id } })
+  // Executive rows cascade with the route; its login goes with it, which
+  // also ends any mobile sessions it holds.
+  await prisma.$transaction([
+    prisma.route.delete({ where: { id } }),
+    ...(existing.loginUserId
+      ? [prisma.user.delete({ where: { id: existing.loginUserId } })]
+      : []),
+  ])
   return new NextResponse(null, { status: 204 })
 }

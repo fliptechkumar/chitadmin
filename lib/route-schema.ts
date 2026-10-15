@@ -3,6 +3,8 @@
  * the API handler enforce the same rules.
  */
 
+import { validatePassword } from "@/lib/password-rules"
+
 export type RouteInput = {
   code: string
   name: string
@@ -14,6 +16,10 @@ export type RouteInput = {
   inchargeId: number | null
   notes: string
   isActive: boolean
+  /** Mobile-app sign-in for the route. Blank means the route has no login. */
+  username: string
+  /** Blank keeps the current password; required when a login is first set up. */
+  password: string
 }
 
 export type RouteErrors = Partial<Record<keyof RouteInput, string>> & {
@@ -22,6 +28,8 @@ export type RouteErrors = Partial<Record<keyof RouteInput, string>> & {
 }
 
 const CODE_RE = /^[A-Z0-9][A-Z0-9-]{0,15}$/
+/** Same rule as staff usernames, since both sign in through one table. */
+const USERNAME_RE = /^[a-z0-9._-]{3,32}$/
 
 type ParseResult =
   | { ok: true; data: RouteInput }
@@ -45,7 +53,11 @@ function cleanIds(value: unknown): number[] {
   return [...new Set(ids)]
 }
 
-export function parseRouteInput(raw: unknown): ParseResult {
+/**
+ * `hasLogin` says whether the route already has a sign-in, which decides
+ * whether a blank password means "keep it" or "missing".
+ */
+export function parseRouteInput(raw: unknown, hasLogin = false): ParseResult {
   const body = (raw ?? {}) as Record<string, unknown>
   const errors: RouteErrors = {}
 
@@ -54,6 +66,9 @@ export function parseRouteInput(raw: unknown): ParseResult {
   const name = typeof body.name === "string" ? body.name.trim() : ""
   const branch = typeof body.branch === "string" ? body.branch.trim() : ""
   const notes = typeof body.notes === "string" ? body.notes.trim() : ""
+  const username =
+    typeof body.username === "string" ? body.username.trim().toLowerCase() : ""
+  const password = typeof body.password === "string" ? body.password : ""
 
   const areas = cleanStrings(body.areas)
   const executiveIds = cleanIds(body.executiveIds)
@@ -82,6 +97,17 @@ export function parseRouteInput(raw: unknown): ParseResult {
 
   if (notes.length > 500) errors.notes = "Notes must be under 500 characters"
 
+  if (username && !USERNAME_RE.test(username)) {
+    errors.username =
+      "3–32 characters: lowercase letters, numbers, dot, dash or underscore"
+  }
+  if (username && !password && !hasLogin) {
+    errors.password = "Set a password for the new login"
+  } else if (username && password) {
+    const problem = validatePassword(password)
+    if (problem) errors.password = problem
+  }
+
   if (Object.keys(errors).length > 0) return { ok: false, errors }
 
   return {
@@ -95,6 +121,8 @@ export function parseRouteInput(raw: unknown): ParseResult {
       inchargeId,
       notes,
       isActive: body.isActive !== false,
+      username,
+      password: username ? password : "",
     },
   }
 }

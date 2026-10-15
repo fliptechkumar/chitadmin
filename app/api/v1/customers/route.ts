@@ -6,7 +6,8 @@ import { apiPage, withApiErrors } from "@/lib/api/response"
 import { pageMeta, pageParams, searchTerm } from "@/lib/api/pagination"
 import { allowedGroupNames } from "@/lib/api/collection-scope"
 
-const COLLECTOR_ROLES = ["SUPER_ADMIN", "CHIT_ADMIN"] as const
+/** Route logins collect on their own branch, like a Chit Admin. */
+const COLLECTOR_ROLES = ["SUPER_ADMIN", "CHIT_ADMIN", "ROUTE"] as const
 
 /**
  * GET /api/v1/customers

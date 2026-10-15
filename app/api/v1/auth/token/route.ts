@@ -50,7 +50,10 @@ export async function POST(request: Request) {
       )
     }
 
-    const user = await prisma.user.findUnique({ where: { username } })
+    const user = await prisma.user.findUnique({
+      where: { username },
+      include: { loginRoute: { select: { id: true, code: true, name: true, branch: true, isActive: true } } },
+    })
     const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH)
 
     if (!user || !passwordOk) {
@@ -58,7 +61,7 @@ export async function POST(request: Request) {
       return apiError("UNAUTHENTICATED", "Invalid username or password.")
     }
 
-    if (!user.isActive) {
+    if (!user.isActive || user.loginRoute?.isActive === false) {
       recordFailure(throttleKey)
       return apiError("FORBIDDEN", "This account has been disabled.")
     }
@@ -84,6 +87,9 @@ export async function POST(request: Request) {
         email: user.email,
         role: user.role,
         branches: user.branches,
+        route: user.loginRoute
+          ? { id: user.loginRoute.id, code: user.loginRoute.code, name: user.loginRoute.name, branch: user.loginRoute.branch }
+          : null,
       },
     })
   })

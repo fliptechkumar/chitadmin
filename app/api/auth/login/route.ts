@@ -46,7 +46,10 @@ export async function POST(request: Request) {
     )
   }
 
-  const user = await prisma.user.findUnique({ where: { username } })
+  const user = await prisma.user.findUnique({
+    where: { username },
+    include: { loginRoute: { select: { id: true } } },
+  })
 
   // Always run a comparison so the timing does not distinguish the two cases.
   const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH)
@@ -60,6 +63,14 @@ export async function POST(request: Request) {
     recordFailure(throttleKey)
     return NextResponse.json(
       { error: "This account has been disabled. Contact your administrator." },
+      { status: 403 }
+    )
+  }
+
+  // Route logins are for the mobile app only.
+  if (user.loginRoute) {
+    return NextResponse.json(
+      { error: "Route logins work in the mobile app only." },
       { status: 403 }
     )
   }

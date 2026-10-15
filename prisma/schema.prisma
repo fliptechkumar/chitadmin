@@ -118,6 +118,8 @@ model User {
   updatedAt    DateTime  @updatedAt
   sessions     Session[]
   routesCreated Route[]
+  /// Set when this account is a route's mobile login (see Route.loginUser).
+  loginRoute    Route?   @relation("RouteLogin")
   denominationsCounted CashDenomination[]
   intervalsUpdated     ChitInterval[]
 
@@ -212,6 +214,11 @@ model Route {
 
   createdById Int?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  /// The route's own sign-in for the mobile app: a USER account scoped to the
+  /// route's branch, so it reuses the normal token, throttle and revoke flow.
+  loginUserId Int?  @unique
+  loginUser   User? @relation("RouteLogin", fields: [loginUserId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

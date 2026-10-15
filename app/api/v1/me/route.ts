@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const auth = await authenticateBearer(request)
     if (!auth.ok) return auth.response
 
-    const { id, username, name, email, role, branches } = auth.user
-    return apiOk({ id, username, name, email, role, branches })
+    const { id, username, name, email, role, branches, route } = auth.user
+    return apiOk({ id, username, name, email, role, branches, route })
   })
 }

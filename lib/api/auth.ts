@@ -22,7 +22,15 @@ export type ApiUser = Principal & {
   name: string
   email: string
   sessionId: string
+  /** Set when this is a route's own login (Settings → Routes). */
+  route: { id: number; code: string; name: string; branch: string } | null
 }
+
+/**
+ * Who may call an endpoint: user roles, plus "ROUTE" for a route's login.
+ * A route login is a USER account, so listing "USER" alone does not admit it.
+ */
+export type ApiAccess = Role | "ROUTE"
 
 export type BearerAuth =
   | { ok: true; user: ApiUser }
@@ -39,7 +47,7 @@ function bearerToken(request: Request): string | undefined {
 
 export async function authenticateBearer(
   request: Request,
-  allowed?: readonly Role[]
+  allowed?: readonly ApiAccess[]
 ): Promise<BearerAuth> {
   const result = await verifyAccessToken(bearerToken(request))
 
@@ -62,14 +70,19 @@ export async function authenticateBearer(
 
   const session = await prisma.session.findUnique({
     where: { id: result.claims.sessionId },
-    include: { user: true },
+    include: {
+      user: {
+        include: { loginRoute: { select: { id: true, code: true, name: true, branch: true, isActive: true } } },
+      },
+    },
   })
 
   if (
     !session ||
     session.kind !== "mobile" ||
     session.userId !== result.claims.userId ||
-    !session.user.isActive
+    !session.user.isActive ||
+    session.user.loginRoute?.isActive === false
   ) {
     return {
       ok: false,
@@ -77,7 +90,9 @@ export async function authenticateBearer(
     }
   }
 
-  if (allowed && !allowed.includes(session.user.role as Role)) {
+  const route = session.user.loginRoute
+  const permitted = route ? allowed?.includes("ROUTE") : allowed?.includes(session.user.role as Role)
+  if (allowed && !permitted) {
     return {
       ok: false,
       response: apiError(
@@ -102,6 +117,7 @@ export async function authenticateBearer(
       role: session.user.role as Role,
       branches: session.user.branches,
       sessionId: session.id,
+      route: route ? { id: route.id, code: route.code, name: route.name, branch: route.branch } : null,
     },
   }
 }
