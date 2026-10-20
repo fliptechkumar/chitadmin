@@ -70,6 +70,7 @@ export async function buildDenominationReport(
         amount: true,
         penalty: true,
         collectedBy: true,
+        routeId: true,
       },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     }),
@@ -129,7 +130,9 @@ export async function buildDenominationReport(
   const routeById = new Map(routes.map((r) => [r.id, r]))
 
   let rows: DenominationRow[] = collections.map((c) => {
-    const routeId = routeOfMember.get(nameKey(c.group, c.customerName)) ?? null
+    // Receipts from the route app record their route; older ones are placed
+    // by the member's seat.
+    const routeId = c.routeId ?? routeOfMember.get(nameKey(c.group, c.customerName)) ?? null
     return {
       id: c.id,
       receiptNo: c.receiptNo,

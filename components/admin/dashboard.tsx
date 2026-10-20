@@ -12,6 +12,7 @@ import {
   Wallet,
 } from "lucide-react"
 
+import FirstDuesSlider from "@/components/admin/first-dues-slider"
 import { Badge, toneFor } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -147,6 +148,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           index={0}
+          href="/home/collections"
           label="Total collections"
           value={data.totalCollected}
           format={inrCompact}
@@ -161,6 +163,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         />
         <StatCard
           index={1}
+          href="/home/groups"
           label="Active groups"
           value={data.activeGroups}
           tone="success"
@@ -169,6 +172,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         />
         <StatCard
           index={2}
+          href="/home/applicants"
           label="Total customers"
           value={data.customers}
           tone="violet"
@@ -177,6 +181,7 @@ export default function Dashboard({ data }: { data: DashboardData }) {
         />
         <StatCard
           index={3}
+          href="/home/dues"
           label="Pending dues"
           value={data.pendingDues}
           format={inrCompact}
@@ -185,6 +190,13 @@ export default function Dashboard({ data }: { data: DashboardData }) {
           caption="overdue on saved records"
         />
       </div>
+
+      <FirstDuesSlider
+        groups={data.firstDues}
+        today={data.today}
+        monthLabel={data.monthLabel}
+        index={4}
+      />
 
       {/* Trend + progress */}
       <div className="grid gap-4 lg:grid-cols-3">

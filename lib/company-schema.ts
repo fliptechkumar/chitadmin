@@ -41,7 +41,7 @@ export const COMPANY_DEFAULTS: CompanyProfile = {
 }
 
 /** Logos are inlined into the database, so keep them small. */
-export const MAX_LOGO_BYTES = 256 * 1024
+export const MAX_LOGO_BYTES = 500 * 1024
 export const ALLOWED_LOGO_TYPES = ["image/png", "image/jpeg", "image/webp", "image/svg+xml"]
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/

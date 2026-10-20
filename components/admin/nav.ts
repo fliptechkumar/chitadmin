@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   NotebookPen,
   Settings2,
-  ShieldCheck,
   Receipt,
   UserCheck,
   Users,
@@ -137,17 +136,10 @@ export const NAV_SECTIONS: NavSection[] = [
     title: "Administration",
     items: [
       {
-        label: "Users",
-        href: "/home/users",
-        icon: ShieldCheck,
-        hint: "Accounts, roles and branch access",
-        roles: ADMINS,
-      },
-      {
         label: "Settings",
         href: "/home/settings",
         icon: Settings2,
-        hint: "Company, roles, interest and penalties",
+        hint: "Company, routes, member import and user accounts",
         roles: SUPER_ONLY,
       },
       {

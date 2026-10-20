@@ -1,5 +1,6 @@
 "use client"
 
+import Link from "next/link"
 import { TrendingDown, TrendingUp } from "lucide-react"
 
 import { Card } from "@/components/ui/card"
@@ -38,6 +39,7 @@ function StatCard({
   caption,
   index = 0,
   loading = false,
+  href,
 }: {
   label: string
   value: number
@@ -48,8 +50,10 @@ function StatCard({
   caption?: string
   index?: number
   loading?: boolean
+  /** Makes the whole card a link to the page behind the figure. */
+  href?: string
 }) {
-  return (
+  const card = (
     <Card
       interactive
       className="reveal group relative overflow-hidden p-5"
@@ -111,6 +115,17 @@ function StatCard({
         )}
       </div>
     </Card>
+  )
+
+  if (!href) return card
+
+  return (
+    <Link
+      href={href}
+      className="block rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+    >
+      {card}
+    </Link>
   )
 }
 

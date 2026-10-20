@@ -20,7 +20,7 @@ export type ReceiptPayload = {
   date: string
   company: ReceiptCompany
   branch: string | null
-  customer: { id: number; name: string; phone: string }
+  customer: { id: number | null; name: string; phone: string }
   group: string
   installment: number
   /** Paise-free rupee integers; the app formats for its own locale. */
@@ -35,7 +35,7 @@ export type ReceiptPayload = {
 type CollectionRow = {
   receiptNo: string
   date: string
-  customerId: number
+  customerId: number | null
   customerName: string
   group: string
   installment: number

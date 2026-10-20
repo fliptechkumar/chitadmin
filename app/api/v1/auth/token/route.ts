@@ -25,6 +25,8 @@ export async function POST(request: Request) {
     const body = (await request.json().catch(() => null)) as {
       username?: unknown
       password?: unknown
+      /** "route" from the collection app, which only route logins may use. */
+      app?: unknown
     } | null
 
     const username =
@@ -64,6 +66,14 @@ export async function POST(request: Request) {
     if (!user.isActive || user.loginRoute?.isActive === false) {
       recordFailure(throttleKey)
       return apiError("FORBIDDEN", "This account has been disabled.")
+    }
+
+    if (body?.app === "route" && !user.loginRoute) {
+      // Checked after the password, so it reveals nothing to a guesser.
+      return apiError(
+        "FORBIDDEN",
+        "This app is for route logins. Use the username set under Settings → Routes."
+      )
     }
 
     clearFailures(throttleKey)

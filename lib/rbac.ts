@@ -33,7 +33,6 @@ const ROUTE_RULES: readonly RouteRule[] = [
   { prefix: "/home/chit-interval", roles: ["SUPER_ADMIN"] },
 
   // Shared admin areas — Chit Admins see a branch-filtered view.
-  { prefix: "/home/users", roles: ["SUPER_ADMIN", "CHIT_ADMIN"] },
   { prefix: "/home/applicants", roles: ["SUPER_ADMIN", "CHIT_ADMIN"] },
   { prefix: "/home/dues", roles: ["SUPER_ADMIN", "CHIT_ADMIN"] },
   { prefix: "/home/auctions", roles: ["SUPER_ADMIN", "CHIT_ADMIN"] },

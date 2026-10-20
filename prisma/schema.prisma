@@ -226,6 +226,7 @@ model Route {
   tickets ChitTicket[]
   denominations CashDenomination[]
   dues    TicketDue[]
+  collections Collection[]
 
   @@index([branch])
   @@index([isActive])
@@ -413,8 +414,21 @@ model ApplicantDocument {
 model Collection {
   id           Int              @id @default(autoincrement())
   receiptNo    String           @unique
-  customerId   Int
-  customer     Customer         @relation(fields: [customerId], references: [id])
+  /// Legacy customer register. Receipts from the route app carry a seat
+  /// (ticketId) instead, so this is empty for them.
+  customerId   Int?
+  customer     Customer?        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  /// The seat paid for, when the receipt came from the route app. Its dues
+  /// ledger (TicketDue) was credited in the same transaction.
+  ticketId     Int?
+  ticket       ChitTicket?      @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  /// Route the cash was collected on, recorded at the time so the
+  /// denomination report need not guess it from the member's name.
+  routeId      Int?
+  route        Route?           @relation(fields: [routeId], references: [id], onDelete: SetNull)
+  /// UTR / cheque number for non-cash payments, and the collector's note.
+  reference    String?
+  note         String?
   customerName String
   group        String
   installment  Int
@@ -429,6 +443,8 @@ model Collection {
   createdAt    DateTime         @default(now())
 
   @@index([date])
+  @@index([routeId, date])
+  @@index([ticketId])
 }
 
 /// The cash an executive hands in at the end of a collection day, counted
@@ -509,6 +525,7 @@ model ChitTicket {
   prizedOn   DateTime?
 
   dues       TicketDue[]
+  collections Collection[]
   auctionsWon Auction[]   @relation("AuctionWinner")
   hallEntries AuctionHallEntry[]
 

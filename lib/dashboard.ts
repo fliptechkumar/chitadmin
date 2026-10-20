@@ -3,6 +3,7 @@ import "server-only"
 import { prisma } from "@/lib/prisma"
 import { branchScope, type Principal } from "@/lib/rbac"
 import { todayIst } from "@/lib/collection-records-server"
+import { loadFirstDues } from "@/lib/first-dues"
 
 /**
  * Live figures for the dashboard, scoped to the caller's branches.
@@ -76,6 +77,7 @@ export async function loadDashboard(user: Principal) {
     activeGroups,
     recentLedger,
     recentReceipts,
+    firstDues,
   ] = await Promise.all([
     prisma.chitGroup.groupBy({ by: ["status"], where: groupScope, _count: true }),
     prisma.chitTicket.groupBy({
@@ -130,6 +132,7 @@ export async function loadDashboard(user: Principal) {
       orderBy: { id: "desc" },
       take: 6,
     }),
+    loadFirstDues(user, ty, tm),
   ])
 
   const statusCount = (s: string) => groupCounts.find((g) => g.status === s)?._count ?? 0
@@ -190,5 +193,7 @@ export async function loadDashboard(user: Principal) {
     todayPenalties: receiptsToday._sum.penalty ?? 0,
     activeGroupList: activeGroups,
     recent,
+    firstDues,
+    monthLabel: `${MONTH_LABEL[tm - 1]} ${ty}`,
   }
 }

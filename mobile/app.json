@@ -1,0 +1,48 @@
+{
+  "expo": {
+    "name": "MI Chits Collect",
+    "slug": "michits-collect",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F4F5F7",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "in.michits.collect"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#0B6B53",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "in.michits.collect"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 120,
+          "backgroundColor": "#0B6B53"
+        }
+      ],
+      "expo-router",
+      ["expo-status-bar", { "style": "dark" }],
+      ["expo-navigation-bar", { "enforceContrast": false, "style": "light" }],
+      "expo-secure-store",
+      "expo-sharing",
+      "expo-font"
+    ],
+    "scheme": "michitscollect",
+    "extra": {
+      "apiUrl": "https://michits.in"
+    }
+  }
+}

@@ -20,11 +20,7 @@ import {
   Wallet,
 } from "lucide-react"
 
-import {
-  DenominationBreakdown,
-  DenominationTallyModal,
-  VarianceText,
-} from "./denomination-tally"
+import { DenominationBreakdown, VarianceText } from "./denomination-tally"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -92,7 +88,6 @@ export default function DenominationReport({
   const [report, setReport] = useState<Report | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState("")
-  const [counting, setCounting] = useState<RouteSummary | null>(null)
 
   const params = useMemo(() => {
     const p = new URLSearchParams({ date })
@@ -490,20 +485,10 @@ export default function DenominationReport({
                 {single
                   ? single.tally
                     ? `Counted by ${single.tally.countedBy || "—"} · ${timeOf(single.tally.updatedAt)}`
-                    : "Not counted yet"
+                    : "Not counted yet · the route counts its cash in the mobile app"
                   : `Combined count of ${totals.talliedCount} route${totals.talliedCount === 1 ? "" : "s"}`}
               </CardDescription>
             </div>
-            {single && (
-              <Button
-                size="sm"
-                variant={single.tally ? "outline" : "default"}
-                onClick={() => setCounting(single)}
-              >
-                <Banknote className="h-3.5 w-3.5" />
-                {single.tally ? "Edit count" : "Count cash"}
-              </Button>
-            )}
           </CardHeader>
           <div className="grid gap-5 p-5 sm:grid-cols-[1fr_auto]">
             {loading && !report ? (
@@ -571,7 +556,6 @@ export default function DenominationReport({
                   <TH className="text-right">Online / Cheque</TH>
                   <TH className="text-right">Counted</TH>
                   <TH>Status</TH>
-                  <TH className="text-right" />
                 </tr>
               </THead>
               <TBody key={params}>
@@ -615,16 +599,6 @@ export default function DenominationReport({
                             {variance < 0 ? "Short" : "Excess"} {inr(Math.abs(variance))}
                           </Badge>
                         )}
-                      </TD>
-                      <TD className="text-right">
-                        <Button
-                          variant={s.tally ? "ghost" : "outline"}
-                          size="xs"
-                          onClick={() => setCounting(s)}
-                        >
-                          <Banknote />
-                          {s.tally ? "Edit" : "Count"}
-                        </Button>
                       </TD>
                     </TR>
                   )
@@ -793,13 +767,6 @@ export default function DenominationReport({
         )}
       </Card>
 
-      <DenominationTallyModal
-        open={counting !== null}
-        route={counting}
-        date={date}
-        onClose={() => setCounting(null)}
-        onSaved={() => void load()}
-      />
     </div>
   )
 }

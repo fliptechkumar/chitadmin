@@ -12,7 +12,7 @@ export const dayOf = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "Asi
 export const todayIst = () => dayOf(new Date())
 
 /** yyyy-mm-dd as noon UTC, so the day survives any timezone it is read in. */
-const atNoon = (day: string) => new Date(`${day}T12:00:00Z`)
+export const atNoon = (day: string) => new Date(`${day}T12:00:00Z`)
 
 type Denied = { ok: false; status: 403 | 404; error: string }
 
@@ -69,12 +69,77 @@ export async function seatsForGroup(groupId: number): Promise<SeatOption[]> {
   }))
 }
 
+type Schedule = Awaited<ReturnType<typeof activeScheduleFor>>
+
 /**
- * The seat's ledger with one row per month of the scheme. Saved months come
+ * A seat's ledger with one row per month of the scheme. Saved months come
  * from the database; months not yet saved are filled from the group's
  * schedule — due on the start day of each month, at the monthly share less
  * that round's dividend once its auction is held — with nothing collected.
+ *
+ * Pure, so a caller listing many seats can load each group's schedule once.
  */
+export function ledgerFor(input: {
+  group: { amount: number; totalTickets: number; startDate: string }
+  dividends: { installmentNo: number; dividend: number }[]
+  schedule: Schedule
+  saved: {
+    installmentNo: number
+    dueDate: Date
+    amountDue: number
+    amountPaid: number
+    paidOn: Date | null
+    routeId: number | null
+  }[]
+  seatRouteId: number | null
+}): MonthRecord[] {
+  const { group: g, schedule } = input
+  const months = Math.max(1, g.totalTickets)
+  const share = Math.round(g.amount / months)
+  const dividend = new Map(input.dividends.map((a) => [a.installmentNo, a.dividend]))
+  const saved = new Map(input.saved.map((d) => [d.installmentNo, d]))
+
+  // Months are dated from the group's own start date.
+  const [sd, sm, sy] = g.startDate.split("/").map(Number)
+
+  /** The configured instalment for a month, or null with no schedule. */
+  const scheduledDue = (k: number) => schedule?.installment.get(k) ?? null
+
+  return Array.from({ length: months }, (_, i) => {
+    const installmentNo = i + 1
+    const row = saved.get(installmentNo)
+    if (row) {
+      return {
+        installmentNo,
+        dueDate: dayOf(row.dueDate),
+        amountDue: row.amountDue,
+        scheduledDue: scheduledDue(installmentNo),
+        amount: row.amountPaid,
+        date: row.paidOn ? dayOf(row.paidOn) : null,
+        routeId: row.routeId ?? input.seatRouteId,
+        saved: true,
+      }
+    }
+
+    const due = sd && sm && sy ? new Date(sy, sm - 1 + i, sd) : new Date()
+    return {
+      installmentNo,
+      dueDate: `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`,
+      // The scheme's schedule when configured; otherwise the share less the
+      // round's auction dividend.
+      amountDue:
+        scheduledDue(installmentNo) ??
+        Math.max(0, share - (dividend.get(installmentNo) ?? 0)),
+      scheduledDue: scheduledDue(installmentNo),
+      amount: 0,
+      date: null,
+      routeId: input.seatRouteId,
+      saved: false,
+    }
+  })
+}
+
+/** A seat's full ledger, after checking the caller may see its branch. */
 export async function loadSeatRecords(
   user: Principal,
   ticketId: number
@@ -131,48 +196,13 @@ export async function loadSeatRecords(
 
   const g = ticket.group
   const months = Math.max(1, g.totalTickets)
-  const share = Math.round(g.amount / months)
-  const dividend = new Map(g.auctions.map((a) => [a.installmentNo, a.dividend]))
-  const saved = new Map(ticket.dues.map((d) => [d.installmentNo, d]))
   const schedule = await activeScheduleFor(g)
-
-  // Months are dated from the group's own start date.
-  const [sd, sm, sy] = g.startDate.split("/").map(Number)
-
-  /** The configured instalment for a month, or null with no schedule. */
-  const scheduledDue = (k: number) => schedule?.installment.get(k) ?? null
-
-  const records: MonthRecord[] = Array.from({ length: months }, (_, i) => {
-    const installmentNo = i + 1
-    const row = saved.get(installmentNo)
-    if (row) {
-      return {
-        installmentNo,
-        dueDate: dayOf(row.dueDate),
-        amountDue: row.amountDue,
-        scheduledDue: scheduledDue(installmentNo),
-        amount: row.amountPaid,
-        date: row.paidOn ? dayOf(row.paidOn) : null,
-        routeId: row.routeId ?? ticket.routeId,
-        saved: true,
-      }
-    }
-
-    const due = sd && sm && sy ? new Date(sy, sm - 1 + i, sd) : new Date()
-    return {
-      installmentNo,
-      dueDate: `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`,
-      // The scheme's schedule when configured; otherwise the share less the
-      // round's auction dividend.
-      amountDue:
-        scheduledDue(installmentNo) ??
-        Math.max(0, share - (dividend.get(installmentNo) ?? 0)),
-      scheduledDue: scheduledDue(installmentNo),
-      amount: 0,
-      date: null,
-      routeId: ticket.routeId,
-      saved: false,
-    }
+  const records = ledgerFor({
+    group: g,
+    dividends: g.auctions,
+    schedule,
+    saved: ticket.dues,
+    seatRouteId: ticket.routeId,
   })
 
   return {

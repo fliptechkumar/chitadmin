@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Prisma client output — generated code, not ours to lint.
     "lib/generated/**",
+    // The Expo app has its own toolchain and lint setup.
+    "mobile/**",
   ]),
 ]);
 

@@ -41,3 +41,10 @@ next-env.d.ts
 
 # Member spreadsheets — real customer PII, never committed
 /data/
+
+# Expo app (mobile/) — its own dependencies and build output
+/mobile/node_modules/
+/mobile/.expo/
+/mobile/dist/
+/mobile/ios/
+/mobile/android/
