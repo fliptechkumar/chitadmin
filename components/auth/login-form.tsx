@@ -1,8 +1,8 @@
 "use client"
 
 import { useSearchParams } from "next/navigation"
-import { useState, type FormEvent } from "react"
-import { AlertCircle, Eye, EyeOff, Loader2 } from "lucide-react"
+import { useRef, useState, type FormEvent } from "react"
+import { AlertCircle, ArrowRight, Check, Eye, EyeOff, Loader2 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
 import { Field, Input } from "@/components/ui/input"
@@ -15,6 +15,24 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState("")
   const [isLoading, setIsLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
+
+  /** A short side-to-side shake on failure; replays even for the same message. */
+  function shake() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
+    formRef.current?.animate(
+      [
+        { transform: "translateX(0)" },
+        { transform: "translateX(-8px)" },
+        { transform: "translateX(7px)" },
+        { transform: "translateX(-5px)" },
+        { transform: "translateX(3px)" },
+        { transform: "translateX(0)" },
+      ],
+      { duration: 420, easing: "cubic-bezier(0.25, 1, 0.5, 1)" }
+    )
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -25,6 +43,7 @@ export default function LoginForm() {
 
     if (!inputUsername || !inputPassword) {
       setError("Please enter both username and password.")
+      shake()
       return
     }
 
@@ -34,8 +53,11 @@ export default function LoginForm() {
     if (!result.ok) {
       setError(result.message)
       setIsLoading(false)
+      shake()
       return
     }
+
+    setSuccess(true)
 
     // Prefer where they were headed before the redirect to login, but only when
     // it is a same-site path — an absolute URL here would be an open redirect.
@@ -43,11 +65,14 @@ export default function LoginForm() {
     const target = next?.startsWith("/") && !next.startsWith("//") ? next : result.redirectTo
 
     // Full navigation so the server re-renders with the new session cookie.
-    window.location.href = target
+    // A beat first, so the success state registers before the page changes.
+    setTimeout(() => {
+      window.location.href = target
+    }, 450)
   }
 
   return (
-    <form className="space-y-4" onSubmit={handleSubmit}>
+    <form ref={formRef} className="space-y-4" onSubmit={handleSubmit}>
       <div className="reveal" style={{ "--i": 1 } as React.CSSProperties}>
         <Field label="Username">
           <Input
@@ -96,10 +121,31 @@ export default function LoginForm() {
         </p>
       )}
 
-      <Button type="submit" size="lg" className="w-full" disabled={isLoading}>
-        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
-        {isLoading ? "Signing in…" : "Sign in"}
-      </Button>
+      <div className="reveal" style={{ "--i": 3 } as React.CSSProperties}>
+        <Button
+          type="submit"
+          size="lg"
+          className={success ? "w-full bg-success hover:bg-success" : "auth-sheen group w-full"}
+          disabled={isLoading}
+        >
+          {success ? (
+            <>
+              <Check className="auth-pop h-4 w-4" />
+              Signed in
+            </>
+          ) : isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Signing in…
+            </>
+          ) : (
+            <>
+              Sign in
+              <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+            </>
+          )}
+        </Button>
+      </div>
     </form>
   )
 }

@@ -1,0 +1,118 @@
+MI CHITS ADMIN - SERVER DEPLOY GUIDE
+====================================
+
+Server : Hostinger VPS (KVM 4), Ubuntu 24.04
+IP     : 200.141.12.144
+Domain : https://michits.in   (also www.michits.in)
+API    : https://michits.in/api/v1   (for the mobile app)
+
+The same server also runs MOOVAR (moovar.chitpro.in, moovarapi.chitpro.in).
+This app is kept fully separate from it:
+
+  Linux user   : chit
+  App folder   : /home/chit/app
+  App port     : 3100   (Nginx forwards michits.in to it)
+  Process name : chit-admin   (PM2, under the chit user)
+  Database     : PostgreSQL 18, database "chit_admin"
+  Settings     : /home/chit/app/.env   (DATABASE_URL, AUTH_SECRET, APP_PORT)
+  Backups      : /var/backups/chit/   (daily at 03:00, kept 14 days)
+
+Never run "npm run db:seed" on the server - it deletes data and loads demo data.
+
+
+------------------------------------------------------------
+1. UPDATING TO NEW CODE  (do this every time you change code)
+------------------------------------------------------------
+
+On your Mac:
+
+    cd ~/Documents/shadcn/admin
+    git add -A
+    git commit -m "describe your change"
+    git push
+
+On the server:
+
+    ssh root@200.141.12.144
+    su - chit -c "bash app/deploy/update.sh"
+
+update.sh pulls the code, installs packages, applies database migrations,
+builds and restarts the app. It ends with "App is running on port 3100".
+
+Check it:
+
+    su - chit -c "pm2 ls"          (chit-admin should be "online")
+    then open https://michits.in
+
+
+------------------------------------------------------------
+2. USEFUL COMMANDS  (on the server, as root)
+------------------------------------------------------------
+
+    App status        su - chit -c "pm2 ls"
+    App logs          su - chit -c "pm2 logs chit-admin --lines 50"
+    Restart app       su - chit -c "pm2 restart chit-admin"
+    Nginx check       nginx -t
+    Nginx errors      tail -30 /var/log/nginx/error.log
+    Reload Nginx      systemctl reload nginx
+    Renew SSL test    certbot renew --dry-run
+    List backups      ls -lh /var/backups/chit/
+
+
+------------------------------------------------------------
+3. IF SOMETHING GOES WRONG
+------------------------------------------------------------
+
+Site not loading
+    su - chit -c "pm2 logs chit-admin --lines 50"
+
+Update failed at "git pull"
+    Someone changed files on the server. Check with:
+        su - chit -c "cd app && git status"
+
+Update failed at "npm run build"
+    Fix the error on your Mac (run "npm run build" there first), push, and
+    run update.sh again. The old version keeps running until a build succeeds
+    and the app is restarted.
+
+Login does not stay signed in
+    The site must be opened with https://, not http://.
+
+
+------------------------------------------------------------
+4. RESTORE A BACKUP  (only if data is lost or damaged)
+------------------------------------------------------------
+
+    ssh root@200.141.12.144
+    su - chit -c "pm2 stop chit-admin"
+    cd /tmp
+    sudo -u postgres /usr/lib/postgresql/18/bin/pg_restore -p 5432 --clean --if-exists \
+        --no-owner --role=chit_admin -d chit_admin /var/backups/chit/chit-YYYY-MM-DD.dump
+    su - chit -c "pm2 start chit-admin"
+
+(Replace YYYY-MM-DD with the backup date. If PostgreSQL 18 was set up on a
+different port, check it with: pg_lsclusters)
+
+
+------------------------------------------------------------
+5. FIRST-TIME SETUP  (already done once - for reference)
+------------------------------------------------------------
+
+On your Mac:
+
+    cd ~/Documents/shadcn/admin
+    git push
+    pg_dump -Fc --no-owner --no-acl "$(grep ^DATABASE_URL .env | cut -d= -f2- | tr -d '"' | sed 's/?.*//')" -f chit_admin.dump
+    scp chit_admin.dump deploy/setup-server.sh root@200.141.12.144:/root/
+
+On the server:
+
+    ssh root@200.141.12.144
+    bash /root/setup-server.sh michits.in your@email.com /root/chit_admin.dump
+    rm /root/chit_admin.dump
+
+For a private GitHub repo, use a GitHub personal access token as the password
+when it asks.
+
+Files used: deploy/setup-server.sh, deploy/update.sh, deploy/nginx.conf
+

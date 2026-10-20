@@ -563,6 +563,77 @@
     }
 }
 
+/* ---- Sign-in screen -------------------------------------------------- */
+
+@keyframes auth-drift-a {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50% { transform: translate3d(8%, 6%, 0) scale(1.12); }
+}
+
+@keyframes auth-drift-b {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1.05); }
+    50% { transform: translate3d(-10%, -8%, 0) scale(0.92); }
+}
+
+@keyframes auth-float {
+    0%, 100% { transform: translate3d(0, 0, 0) rotate(-2deg); }
+    50% { transform: translate3d(0, -10px, 0) rotate(-1deg); }
+}
+
+@keyframes auth-bar {
+    0%, 100% { transform: scaleY(var(--lo, 0.35)); }
+    50% { transform: scaleY(var(--hi, 1)); }
+}
+
+@keyframes auth-word {
+    from { opacity: 0; transform: translate3d(0, 0.6em, 0); filter: blur(6px); }
+    to { opacity: 1; transform: none; filter: blur(0); }
+}
+
+@keyframes auth-sheen {
+    from { transform: translateX(-120%) skewX(-20deg); }
+    to { transform: translateX(220%) skewX(-20deg); }
+}
+
+@keyframes auth-pop {
+    0% { transform: scale(0.4); opacity: 0; }
+    60% { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); }
+}
+
+@layer components {
+    .auth-blob-a { animation: auth-drift-a 14s ease-in-out infinite; }
+    .auth-blob-b { animation: auth-drift-b 18s ease-in-out infinite; }
+    .auth-float { animation: auth-float 7s ease-in-out infinite; }
+
+    .auth-bar {
+        transform-origin: bottom;
+        animation: auth-bar 2.8s ease-in-out infinite;
+        animation-delay: calc(var(--i, 0) * -0.35s);
+    }
+
+    .auth-word {
+        display: inline-block;
+        animation: auth-word 700ms var(--ease-out-quart) both;
+        animation-delay: calc(200ms + var(--i, 0) * 60ms);
+    }
+
+    /* A light streak that crosses the button on hover. */
+    .auth-sheen { position: relative; overflow: hidden; }
+    .auth-sheen::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        width: 40%;
+        background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.35), transparent);
+        transform: translateX(-120%) skewX(-20deg);
+        pointer-events: none;
+    }
+    .auth-sheen:hover:not(:disabled)::after { animation: auth-sheen 900ms var(--ease-out-quart); }
+
+    .auth-pop { animation: auth-pop 420ms var(--ease-spring) both; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
