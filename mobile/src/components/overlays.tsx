@@ -5,7 +5,6 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   ScrollView,
   View,
@@ -75,7 +74,7 @@ export function Sheet({
       <SafeAreaProvider>
         <SafeAreaInsetsContext.Consumer>
           {(insets) => (
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <KeyboardAvoidingView style={{ flex: 1 }} behavior="padding">
               <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.overlay, opacity: fade }}>
                 <Pressable style={{ flex: 1 }} onPress={onClose} accessibilityLabel="Close" />
               </Animated.View>

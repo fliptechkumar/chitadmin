@@ -8,14 +8,17 @@ import { Icon } from '@/components/Icon'
 import { useOverlay } from '@/components/overlays'
 import { AppBar, Bold, Button, Card, EmptyState, ErrorState, IconButton, InlineAlert, ListGroup, ListRow, RowEnd, SectionHeader, SkeletonCards, StickyFooter, Txt } from '@/components/ui'
 import { DenominationSheet } from '@/features/DenominationSheet'
+import { usePrinter } from '@/features/usePrinter'
+import { statementEscPos } from '@/lib/escpos'
 import { dLong, inr, MODE_LABEL, timeOf, titleCase } from '@/lib/format'
-import { printHtml, shareHtmlAsPdf, statementHtml } from '@/lib/print'
+import { shareHtmlAsPdf, statementHtml } from '@/lib/print'
 import { useTheme } from '@/theme/theme'
 import { fs, radius, sp } from '@/theme/tokens'
 
 export default function Statement() {
   const { c } = useTheme()
   const { confirm, toast } = useOverlay()
+  const printer = usePrinter()
   const { data, error, loading, refreshing, refresh } = useApi<DayStatement>('/api/v1/route/collections')
   const overview = useApi<Overview>('/api/v1/route/overview')
   const [denomOpen, setDenomOpen] = useState(false)
@@ -25,14 +28,16 @@ export default function Statement() {
   const counted = !!dn?.counted
   const matched = counted && dn!.total === dn!.cash
 
-  function html() {
+  function header() {
     const ov = overview.data
-    return statementHtml(data!, {
+    return {
       company: ov?.company.name ?? '',
       route: ov ? `${ov.route.code} ${ov.route.name}` : '',
       collector: ov?.collector ?? '',
-    })
+    }
   }
+
+  const html = () => statementHtml(data!, header())
 
   async function print() {
     if (!data) return
@@ -51,7 +56,7 @@ export default function Statement() {
     }
     setBusy(true)
     try {
-      await printHtml(html())
+      await printer.print({ escpos: () => statementEscPos(data, header()), html })
     } catch (e) {
       const msg = e instanceof Error ? e.message : ''
       if (msg && !/cancel/i.test(msg)) toast(msg, 'error')

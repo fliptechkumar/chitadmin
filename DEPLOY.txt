@@ -31,13 +31,18 @@ On your Mac:
     git commit -m "describe your change"
     git push
 
-On the server:
+Before pushing, check "git status" lists any new prisma/migrations/ folder -
+without it the server will not get the new tables.
+
+On the server (run these one at a time - enter the password after the first):
 
     ssh root@200.141.12.144
     su - chit -c "bash app/deploy/update.sh"
 
 update.sh pulls the code, installs packages, applies database migrations,
-builds and restarts the app. It ends with "App is running on port 3100".
+builds and restarts the app. It prints "All migrations have been successfully
+applied" part-way, then builds for a few minutes, and ends with
+"App is running on port 3100". Wait for that last line.
 
 Check it:
 
@@ -80,7 +85,97 @@ Login does not stay signed in
 
 
 ------------------------------------------------------------
-4. RESTORE A BACKUP  (only if data is lost or damaged)
+4. MOBILE APP  (MI Chits Collect - Android)
+------------------------------------------------------------
+
+Folder  : ~/Documents/shadcn/admin/mobile   (Expo SDK 57)
+Account : Expo account "sivakathir"  (check with: npx expo whoami)
+Builds  : https://expo.dev  ->  project michits-collect  ->  Builds
+API     : builds always use https://michits.in (set in mobile/eas.json)
+
+All commands below are run on your Mac from the mobile folder:
+
+    cd ~/Documents/shadcn/admin/mobile
+
+Test on your phone (Expo Go)
+
+    npx expo start                 (scan the QR code with Expo Go)
+
+Before building or updating, check the code:
+
+    npx tsc --noEmit
+    npx expo lint
+
+A) SMALL FIX - code only, no reinstall  (EAS Update)
+
+    npm run update:production -- --message "describe the fix"
+
+    Phones download it in the background and use it the next time the
+    app is closed and reopened. Use this for screen, text and logic changes.
+
+B) NEW APK - needed when any of these change:
+     - a package with native code is added (npx expo install ...)
+     - app.json plugins, icon, splash screen or permissions
+     - "version" in app.json
+
+    APK to install directly on phones:
+        npx eas-cli@latest build -p android --profile production-apk
+
+    Play Store bundle (.aab):
+        npx eas-cli@latest build -p android --profile production
+
+    Test APK (does not get production updates):
+        npx eas-cli@latest build -p android --profile preview
+
+    Takes 10-20 minutes. Download the file from the link it prints.
+    Install the new APK over the old one - do not uninstall first.
+
+Version rule
+    Updates only reach builds with the same "version" in app.json (now 1.0.0).
+    If you change "version", make a new build straight away and install it
+    on every phone - older builds stop receiving updates.
+
+Signing key (keystore) - IMPORTANT
+    EAS keeps the Android signing key. Every future APK must use the same
+    key or it will not install over the old app. Keep a backup copy:
+        npx eas-cli@latest credentials -p android
+        (Android -> production -> Keystore -> Download)
+    Never delete the project or its credentials on expo.dev.
+
+Testing against a local server
+    mobile/.env.local sets EXPO_PUBLIC_API_URL for Expo Go only. It is not
+    used by builds, and "npm run update:production" always uses
+    https://michits.in, so it cannot point live phones at your Mac.
+
+
+------------------------------------------------------------
+5. LOOK AT THE LIVE DATABASE FROM YOUR MAC  (read only)
+------------------------------------------------------------
+
+The database password is in /home/chit/app/.env on the server:
+
+    grep '^DATABASE_URL=' /home/chit/app/.env
+
+Never put it in the Mac's admin/.env. Open a tunnel and leave it running:
+
+    ssh -L 5433:localhost:5432 root@200.141.12.144
+
+Then connect a database tool (TablePlus, DBeaver, psql) to localhost:5433
+with the user, password and database from that URL.
+
+While connected to live data, never run "npm run db:seed",
+"prisma migrate dev" or "prisma db push".
+
+Safer for testing - restore a backup into a local copy instead:
+
+    scp root@200.141.12.144:/var/backups/chit/chit-YYYY-MM-DD.dump ~/Downloads/
+    createdb chit_prod_copy
+    pg_restore --no-owner -d chit_prod_copy ~/Downloads/chit-YYYY-MM-DD.dump
+    DATABASE_URL="postgresql://<your-mac-user>@localhost:5432/chit_prod_copy" npm run dev
+
+
+------------------------------------------------------------
+6. RESTORE A BACKUP  (only if data is lost or damaged)
 ------------------------------------------------------------
 
     ssh root@200.141.12.144
@@ -95,7 +190,7 @@ different port, check it with: pg_lsclusters)
 
 
 ------------------------------------------------------------
-5. FIRST-TIME SETUP  (already done once - for reference)
+7. FIRST-TIME SETUP  (already done once - for reference)
 ------------------------------------------------------------
 
 On your Mac:

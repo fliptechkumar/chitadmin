@@ -7,8 +7,10 @@ import { useApi } from '@/api/useApi'
 import { Icon } from '@/components/Icon'
 import { useOverlay } from '@/components/overlays'
 import { AppBar, Button, ErrorState, IconButton, KV, Pill, SkeletonCards, StickyFooter, Txt } from '@/components/ui'
+import { usePrinter } from '@/features/usePrinter'
+import { receiptEscPos } from '@/lib/escpos'
 import { dLong, inr, MODE_LABEL, timeOf, titleCase } from '@/lib/format'
-import { printHtml, receiptHtml, shareHtmlAsPdf } from '@/lib/print'
+import { receiptHtml, shareHtmlAsPdf } from '@/lib/print'
 import { useTheme } from '@/theme/theme'
 import { fs, radius, shadow, sp } from '@/theme/tokens'
 
@@ -17,6 +19,7 @@ const MODE_ICON = { cash: 'cash', online: 'upi', cheque: 'bank' } as const
 export default function ReceiptScreen() {
   const { c, isDark } = useTheme()
   const { toast } = useOverlay()
+  const { print } = usePrinter()
   const params = useLocalSearchParams<{ id: string; fresh?: string; applied?: string }>()
   const fresh = params.fresh === '1'
   const { data: r, error, loading, refresh } = useApi<Receipt>(`/api/v1/route/collections/${params.id}`)
@@ -34,9 +37,8 @@ export default function ReceiptScreen() {
     if (!r) return
     setBusy(kind)
     try {
-      const html = receiptHtml(r, applied)
-      if (kind === 'print') await printHtml(html)
-      else await shareHtmlAsPdf(html, `Receipt ${r.receiptNo}`)
+      if (kind === 'print') await print({ escpos: () => receiptEscPos(r, applied), html: () => receiptHtml(r, applied) })
+      else await shareHtmlAsPdf(receiptHtml(r, applied), `Receipt ${r.receiptNo}`)
     } catch (e) {
       // Cancelling the print dialog lands here on some phones; stay quiet.
       const msg = e instanceof Error ? e.message : ''

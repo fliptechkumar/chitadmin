@@ -62,7 +62,7 @@ export function setSignedOutHandler(fn: () => void) {
 async function raw(path: string, init: RequestInit, token?: string) {
   let res: Response
   const url = `${API_URL}${path}`
-  // console.log("url", url)
+    console.log("url", url)
   try {
     res = await fetch(url, {
       ...init,

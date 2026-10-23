@@ -8,6 +8,8 @@ import { useApi } from '@/api/useApi'
 import { Icon } from '@/components/Icon'
 import { useOverlay } from '@/components/overlays'
 import { AppBar, Avatar, Button, Card, ListGroup, ListRow, RowIcon, SectionHeader, StatTile, Switch, Txt } from '@/components/ui'
+import { usePrinter } from '@/features/usePrinter'
+import { testPageEscPos } from '@/lib/escpos'
 import { inrShort, titleCase } from '@/lib/format'
 import { useTheme } from '@/theme/theme'
 import { fs, sp } from '@/theme/tokens'
@@ -16,6 +18,7 @@ export default function Profile() {
   const { c, isDark, pref, setPref } = useTheme()
   const { user, logout } = useAuth()
   const { confirm, toast } = useOverlay()
+  const printer = usePrinter()
   const { data } = useApi<Overview>('/api/v1/route/overview')
   const route = data?.route ?? user?.route
 
@@ -28,6 +31,26 @@ export default function Profile() {
       icon: 'logout',
     })
     if (ok) await logout()
+  }
+
+  const fail = (e: unknown) => {
+    const msg = e instanceof Error ? e.message : ''
+    if (msg && !/cancel/i.test(msg)) toast(msg, 'error')
+  }
+
+  async function choosePrinter() {
+    try {
+      const p = await printer.choose()
+      if (p) toast(`${p.name} set as receipt printer`)
+    } catch (e) {
+      fail(e)
+    }
+  }
+
+  async function testPrint() {
+    if (!printer.printer) return
+    const name = printer.printer.name
+    await printer.print({ escpos: () => testPageEscPos(name), html: () => '' }).catch(fail)
   }
 
   const call = () => {
@@ -79,7 +102,22 @@ export default function Profile() {
 
         <SectionHeader title="Device" />
         <ListGroup>
-          <ListRow lead={<RowIcon name="printer" tone="info" />} title="Receipt printing" sub="Uses the phone's print service" />
+          {printer.supported ? (
+            <>
+              <ListRow
+                onPress={choosePrinter}
+                lead={<RowIcon name="printer" tone="info" />}
+                title="Receipt printer"
+                sub={printer.printer ? `${printer.printer.name} · Bluetooth` : 'Not chosen · tap to pick a paired printer'}
+                chevron
+              />
+              {printer.printer && (
+                <ListRow onPress={testPrint} lead={<RowIcon name="receipt" tone="primary" />} title="Print test page" sub="Check the printer is on and lined up" />
+              )}
+            </>
+          ) : (
+            <ListRow lead={<RowIcon name="printer" tone="info" />} title="Receipt printing" sub="Uses the phone's print service" />
+          )}
           <ListRow lead={<RowIcon name="globe" tone="primary" />} title="Server" sub={API_URL.replace(/^https?:\/\//, '')} />
         </ListGroup>
 

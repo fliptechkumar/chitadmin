@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native'
+import { Image, KeyboardAvoidingView, Pressable, ScrollView, TextInput, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 
 import { useAuth } from '@/api/auth'
@@ -45,7 +45,9 @@ export default function Login() {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    // Padding on Android too: release builds draw edge-to-edge, so the window
+    // no longer shrinks for the keyboard and the fields would sit under it.
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior="padding">
       <LoginBackdrop />
       <ScrollView
         keyboardShouldPersistTaps="handled"

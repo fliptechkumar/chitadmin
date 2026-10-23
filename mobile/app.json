@@ -19,7 +19,14 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "in.michits.collect"
+      "package": "in.michits.collect",
+      "blockedPermissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.BLUETOOTH_SCAN"
+      ],
+      "runtimeVersion": {
+        "policy": "appVersion"
+      }
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -34,15 +41,41 @@
         }
       ],
       "expo-router",
-      ["expo-status-bar", { "style": "dark" }],
-      ["expo-navigation-bar", { "enforceContrast": false, "style": "light" }],
+      [
+        "expo-status-bar",
+        {
+          "style": "dark"
+        }
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          "enforceContrast": false,
+          "style": "light"
+        }
+      ],
       "expo-secure-store",
       "expo-sharing",
       "expo-font"
     ],
     "scheme": "michitscollect",
     "extra": {
-      "apiUrl": "https://michits.in"
+      "apiUrl": "https://michits.in",
+      "router": {},
+      "expo-status-bar": {
+        "style": "dark"
+      },
+      "expo-navigation-bar": {
+        "enforceContrast": false,
+        "style": "light"
+      },
+      "eas": {
+        "projectId": "fbd6c5fb-aa74-4192-acef-212c2eb5e1e3"
+      }
+    },
+    "owner": "sivakathir",
+    "updates": {
+      "url": "https://u.expo.dev/fbd6c5fb-aa74-4192-acef-212c2eb5e1e3"
     }
   }
 }

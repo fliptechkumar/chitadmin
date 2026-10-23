@@ -1,0 +1,44 @@
+{
+  "cli": {
+    "version": ">= 25.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "22.13.1",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://michits.in"
+      }
+    },
+    "preview": {
+      "extends": "base",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "channel": "preview"
+    },
+    "production": {
+      "extends": "base",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "channel": "production"
+    },
+    "production-apk": {
+      "extends": "production",
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}
