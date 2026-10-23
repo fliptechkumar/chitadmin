@@ -423,7 +423,7 @@ export default function ApplicantForm({
                 />
               </Field>
 
-              <Field label="Last name *" error={errors.lastName}>
+              <Field label="Last name" error={errors.lastName}>
                 <Input
                   value={draft.lastName}
                   onChange={(e) => set("lastName", e.target.value)}
@@ -478,9 +478,9 @@ export default function ApplicantForm({
             <GroupHeading>Identity documents</GroupHeading>
 
             <Field
-              label="Aadhaar number *"
+              label="Aadhaar number"
               error={errors.aadhaarNumber}
-              hint="12 digits, mandatory for every applicant"
+              hint="Optional · 12 digits"
               className="sm:max-w-sm"
             >
               <Input

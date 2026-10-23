@@ -348,8 +348,8 @@ model Applicant {
   gender        String?
   maritalStatus String?
   signDate      DateTime?
-  /// Mandatory KYC identifier. Defaulted at the column level so the migration
-  /// could run against existing rows; emptiness is rejected by validation.
+  /// Optional KYC identifier; empty when not collected. When given, validation
+  /// requires all 12 digits.
   aadhaarNumber String              @default("")
   /// Any further proofs collected — PAN, voter ID, passport and so on.
   documents     ApplicantDocument[]

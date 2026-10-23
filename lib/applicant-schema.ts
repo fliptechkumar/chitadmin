@@ -24,7 +24,7 @@ export const OCCUPATION_TYPES = [
 ] as const
 /**
  * Types available for the optional extra proofs. Aadhaar is deliberately absent
- * — it has its own mandatory field, and listing it here would allow two
+ * — it has its own field, and listing it here would allow two
  * conflicting Aadhaar numbers on one applicant.
  */
 export const ID_DOCUMENT_TYPES = [
@@ -65,7 +65,7 @@ export type ApplicantDraft = {
   gender: string
   maritalStatus: string
   signDate: string
-  /** Mandatory 12-digit Aadhaar. */
+  /** Optional 12-digit Aadhaar. */
   aadhaarNumber: string
   /** Optional further proofs, each a type plus number. */
   documents: ApplicantDocumentDraft[]
@@ -210,7 +210,6 @@ export function validateStep(
 
     required(errors, draft, "branch", "Branch")
     required(errors, draft, "firstName", "First name")
-    required(errors, draft, "lastName", "Last name")
 
     if (!draft.dateOfBirth) {
       errors.dateOfBirth = "Date of birth is required"
@@ -233,9 +232,8 @@ export function validateStep(
       }
     }
 
-    if (!draft.aadhaarNumber.trim()) {
-      errors.aadhaarNumber = "Aadhaar number is required"
-    } else if (!AADHAAR_RE.test(draft.aadhaarNumber.replace(/\s/g, ""))) {
+    // Optional, but a number that is entered must be a whole one.
+    if (draft.aadhaarNumber.trim() && !AADHAAR_RE.test(draft.aadhaarNumber.replace(/\s/g, ""))) {
       errors.aadhaarNumber = "Enter a 12-digit Aadhaar number"
     }
 
