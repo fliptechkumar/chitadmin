@@ -183,12 +183,25 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const MIN_AGE = 18
 
+/**
+ * "create" enforces the full enrolment form. "edit" is for saved applicants,
+ * most of whom were imported from member sheets without these details: only
+ * the fields needed to identify and reach the member stay required, so a
+ * single correction never forces the rest of the form to be filled in.
+ * Anything that is entered is still checked in both modes.
+ */
+export type ValidationMode = "create" | "edit"
+
+const EDIT_REQUIRED = new Set<keyof ApplicantDraft>(["mobile", "branch", "firstName"])
+
 function required(
   errors: ApplicantErrors,
   draft: ApplicantDraft,
   key: keyof ApplicantDraft,
-  label: string
+  label: string,
+  mode: ValidationMode
 ) {
+  if (mode === "edit" && !EDIT_REQUIRED.has(key)) return
   const value = draft[key]
   if (typeof value === "string" && !value.trim()) {
     errors[key] = `${label} is required`
@@ -198,9 +211,11 @@ function required(
 /** Validates one step in isolation. Returns the errors found, if any. */
 export function validateStep(
   step: ApplicantStep,
-  draft: ApplicantDraft
+  draft: ApplicantDraft,
+  mode: ValidationMode = "create"
 ): ApplicantErrors {
   const errors: ApplicantErrors = {}
+  const strict = mode === "create"
 
   if (step === "applicant") {
     if (!draft.mobile.trim()) errors.mobile = "Mobile number is required"
@@ -208,11 +223,11 @@ export function validateStep(
       errors.mobile = "Enter a 10-digit Indian mobile number"
     }
 
-    required(errors, draft, "branch", "Branch")
-    required(errors, draft, "firstName", "First name")
+    required(errors, draft, "branch", "Branch", mode)
+    required(errors, draft, "firstName", "First name", mode)
 
     if (!draft.dateOfBirth) {
-      errors.dateOfBirth = "Date of birth is required"
+      if (strict) errors.dateOfBirth = "Date of birth is required"
     } else {
       const age = ageFrom(draft.dateOfBirth)
       if (age === null) errors.dateOfBirth = "Enter a valid date of birth"
@@ -221,10 +236,10 @@ export function validateStep(
       }
     }
 
-    required(errors, draft, "signDate", "Sign date")
+    required(errors, draft, "signDate", "Sign date", mode)
 
     if (!draft.chitValue.trim()) {
-      errors.chitValue = "Chit value is required"
+      if (strict) errors.chitValue = "Chit value is required"
     } else {
       const value = Number(draft.chitValue)
       if (!Number.isFinite(value) || value < 1000) {
@@ -270,13 +285,14 @@ export function validateStep(
       errors.altPhone = "Enter a 10-digit number"
     }
 
-    required(errors, draft, "addressLine1", "Address")
-    required(errors, draft, "area", "Area")
-    required(errors, draft, "city", "City")
-    required(errors, draft, "state", "State")
+    required(errors, draft, "addressLine1", "Address", mode)
+    required(errors, draft, "area", "Area", mode)
+    required(errors, draft, "city", "City", mode)
+    required(errors, draft, "state", "State", mode)
 
-    if (!draft.pincode.trim()) errors.pincode = "Pincode is required"
-    else if (!PINCODE_RE.test(draft.pincode.trim())) {
+    if (!draft.pincode.trim()) {
+      if (strict) errors.pincode = "Pincode is required"
+    } else if (!PINCODE_RE.test(draft.pincode.trim())) {
       errors.pincode = "Enter a 6-digit pincode"
     }
 
@@ -286,7 +302,7 @@ export function validateStep(
   }
 
   if (step === "business") {
-    required(errors, draft, "occupationType", "Occupation type")
+    required(errors, draft, "occupationType", "Occupation type", mode)
 
     if (draft.annualIncome.trim()) {
       const income = Number(draft.annualIncome)
@@ -304,8 +320,8 @@ export function validateStep(
   }
 
   if (step === "introducer") {
-    required(errors, draft, "nomineeName", "Nominee name")
-    required(errors, draft, "nomineeRelation", "Relationship")
+    required(errors, draft, "nomineeName", "Nominee name", mode)
+    required(errors, draft, "nomineeRelation", "Relationship", mode)
 
     if (draft.nomineeMobile.trim() && !MOBILE_RE.test(draft.nomineeMobile.trim())) {
       errors.nomineeMobile = "Enter a 10-digit number"
@@ -321,9 +337,9 @@ export function validateStep(
 }
 
 /** Every step's errors, merged — used to gate submission. */
-export function validateAll(draft: ApplicantDraft): ApplicantErrors {
+export function validateAll(draft: ApplicantDraft, mode: ValidationMode = "create"): ApplicantErrors {
   return APPLICANT_STEPS.reduce<ApplicantErrors>(
-    (acc, step) => ({ ...acc, ...validateStep(step, draft) }),
+    (acc, step) => ({ ...acc, ...validateStep(step, draft, mode) }),
     {}
   )
 }

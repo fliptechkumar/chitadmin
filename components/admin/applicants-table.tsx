@@ -4,9 +4,13 @@ import Link from "next/link"
 import { useMemo, useState } from "react"
 import {
   ArrowUpDown,
+  BadgeCheck,
   FileCheck2,
   FileClock,
+  Hourglass,
   Loader2,
+  Pencil,
+  Ticket,
   Trash2,
   UserPlus,
   UserRoundCog,
@@ -20,7 +24,7 @@ import { Card } from "@/components/ui/card"
 import { EmptyState } from "@/components/ui/empty-state"
 import { SearchInput, Select } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
-import { StatTile } from "@/components/ui/stat-card"
+import { CountUp } from "@/components/ui/count-up"
 import { Table, TableWrap, TBody, TD, TH, THead, TR } from "@/components/ui/table"
 import { Toolbar } from "@/components/ui/toolbar"
 import { inr, inrCompact } from "@/lib/format"
@@ -40,6 +44,12 @@ export type ApplicantRow = {
   documentsUploaded: boolean
   createdAt: string
   assignedTo: { id: number; name: string } | null
+  tickets: {
+    id: number
+    ticketNo: number
+    status: "active" | "suspended" | "closed"
+    group: { id: number; group: string }
+  }[]
 }
 
 export type EmployeeOption = { id: number; name: string; branch: string }
@@ -74,6 +84,96 @@ const AVATAR_TONES = [
 function avatarTone(name: string) {
   const sum = [...name].reduce((acc, char) => acc + char.charCodeAt(0), 0)
   return AVATAR_TONES[sum % AVATAR_TONES.length]
+}
+
+type SummaryTone = "brand" | "violet" | "warning" | "success"
+
+const SUMMARY_TONE: Record<SummaryTone, { chip: string; bar: string; ring: string }> = {
+  brand: { chip: "bg-brand-soft text-brand-soft-foreground", bar: "bg-brand", ring: "ring-brand" },
+  violet: { chip: "bg-violet-soft text-violet-soft-foreground", bar: "bg-violet", ring: "ring-violet" },
+  warning: { chip: "bg-warning-soft text-warning-soft-foreground", bar: "bg-warning", ring: "ring-warning" },
+  success: { chip: "bg-success-soft text-success-soft-foreground", bar: "bg-success", ring: "ring-success" },
+}
+
+/**
+ * One status figure above the list. Clicking it filters the list to that
+ * status (and again to clear it); the share bar shows its part of the whole.
+ */
+function SummaryCard({
+  index,
+  tone,
+  icon: Icon,
+  label,
+  value,
+  total,
+  caption,
+  active,
+  onClick,
+}: {
+  index: number
+  tone: SummaryTone
+  icon: React.ElementType
+  label: string
+  value: number
+  /** When given, the card shows `value` as a share of it. */
+  total?: number
+  caption: string
+  active: boolean
+  onClick: () => void
+}) {
+  const t = SUMMARY_TONE[tone]
+  const share = total ? Math.round((value / total) * 100) : null
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      style={{ "--i": index } as React.CSSProperties}
+      className={cn(
+        "reveal lift group relative flex flex-col gap-2 overflow-hidden rounded-xl border bg-card px-3.5 py-3 text-left shadow-sm outline-none transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+        active ? cn("border-transparent ring-2", t.ring) : "border-border hover:border-brand/30"
+      )}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-transform duration-300 group-hover:scale-105",
+              t.chip
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </span>
+          <span className="truncate text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {label}
+          </span>
+        </span>
+        {share !== null && (
+          <span className={cn("tnum rounded-full px-2 py-0.5 text-2xs font-semibold", t.chip)}>
+            {share}%
+          </span>
+        )}
+      </div>
+
+      <div className="flex items-baseline gap-2">
+        <p className="tnum text-xl font-bold leading-none tracking-tight text-foreground">
+          <CountUp value={value} />
+        </p>
+        <p className="min-w-0 truncate text-xs text-muted-foreground">{caption}</p>
+      </div>
+
+      {share !== null && (
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
+          <div
+            className={cn("h-full rounded-full transition-[width] duration-700 ease-out-expo", t.bar)}
+            style={{ width: `${Math.max(share, value > 0 ? 2 : 0)}%` }}
+          />
+        </div>
+      )}
+    </button>
+  )
 }
 
 function formatDate(value: string) {
@@ -122,7 +222,8 @@ export default function ApplicantsTable({
         row.mobile.includes(q) ||
         row.applicantCode.toLowerCase().includes(q) ||
         (row.area ?? "").toLowerCase().includes(q) ||
-        (row.introducerName ?? "").toLowerCase().includes(q)
+        (row.introducerName ?? "").toLowerCase().includes(q) ||
+        row.tickets.some((t) => t.group.group.toLowerCase().includes(q))
 
       return (
         matchesQuery &&
@@ -151,15 +252,26 @@ export default function ApplicantsTable({
     currentPage * rowsPerPage
   )
 
-  const totals = useMemo(
-    () => ({
-      all: rows.length,
-      pending: rows.filter((r) => r.status === "pending").length,
-      approved: rows.filter((r) => r.status === "approved").length,
-      value: rows.reduce((sum, r) => sum + r.chitValue, 0),
-    }),
-    [rows]
-  )
+  // Summary follows the branch filter, but not search or status: the cards
+  // are themselves the status filter, so they must keep showing every status.
+  const totals = useMemo(() => {
+    const scoped = branchFilter ? rows.filter((r) => r.branch === branchFilter) : rows
+    const count = (status: ApplicantRow["status"]) => scoped.filter((r) => r.status === status).length
+    return {
+      all: scoped.length,
+      value: scoped.reduce((sum, r) => sum + r.chitValue, 0),
+      seated: scoped.filter((r) => r.tickets.length > 0).length,
+      pending: count("pending"),
+      allocated: count("allocated"),
+      approved: count("approved"),
+      rejected: count("rejected"),
+    }
+  }, [rows, branchFilter])
+
+  function filterStatus(status: string) {
+    setStatusFilter((prev) => (prev === status ? "" : status))
+    setPage(1)
+  }
 
   function toggleSort(key: SortKey) {
     if (key === sortKey) setSortAsc((prev) => !prev)
@@ -224,15 +336,48 @@ export default function ApplicantsTable({
   return (
     <div className="space-y-4">
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <StatTile label="Applicants" value={totals.all} index={1} />
-        <StatTile label="Awaiting review" value={totals.pending} tone="warning" index={2} />
-        <StatTile label="Approved" value={totals.approved} tone="success" index={3} />
-        <StatTile
-          label="Total value"
-          value={totals.value}
-          format={inrCompact}
+        <SummaryCard
+          index={1}
+          tone="violet"
+          icon={Users2}
+          label="All applicants"
+          value={totals.all}
+          caption={`${inrCompact(totals.value)} total chit value`}
+          active={!statusFilter}
+          onClick={() => filterStatus("")}
+        />
+        <SummaryCard
+          index={2}
           tone="brand"
+          icon={Ticket}
+          label="Allocated"
+          value={totals.allocated}
+          total={totals.all}
+          caption={`${totals.seated.toLocaleString("en-IN")} hold a seat in a group`}
+          active={statusFilter === "allocated"}
+          onClick={() => filterStatus("allocated")}
+        />
+        <SummaryCard
+          index={3}
+          tone="warning"
+          icon={Hourglass}
+          label="Awaiting review"
+          value={totals.pending}
+          total={totals.all}
+          caption={totals.pending ? "Need an approve or reject" : "Nothing waiting"}
+          active={statusFilter === "pending"}
+          onClick={() => filterStatus("pending")}
+        />
+        <SummaryCard
           index={4}
+          tone="success"
+          icon={BadgeCheck}
+          label="Approved"
+          value={totals.approved}
+          total={totals.all}
+          caption={`${totals.rejected.toLocaleString("en-IN")} rejected`}
+          active={statusFilter === "approved"}
+          onClick={() => filterStatus("approved")}
         />
       </div>
 
@@ -259,7 +404,7 @@ export default function ApplicantsTable({
             setSearch(e.target.value)
             setPage(1)
           }}
-          placeholder="Search name, mobile, code or area…"
+          placeholder="Search name, mobile, code, area or group…"
           className="w-full sm:w-72"
         />
         <Select
@@ -338,6 +483,7 @@ export default function ApplicantsTable({
                       </span>
                     </TH>
                     <TH>Mobile</TH>
+                    <TH>Group</TH>
                     <TH sortable onClick={() => toggleSort("createdAt")}>
                       <span className="inline-flex items-center gap-1">
                         Created
@@ -393,6 +539,29 @@ export default function ApplicantsTable({
                         </TD>
 
                         <TD className="tnum whitespace-nowrap">{row.mobile}</TD>
+                        <TD>
+                          {row.tickets.length === 0 ? (
+                            <span className="text-xs text-muted-foreground">Not assigned</span>
+                          ) : (
+                            <div className="flex max-w-[12rem] flex-wrap gap-1">
+                              {row.tickets.map((t) => (
+                                <Link
+                                  key={t.id}
+                                  href={`/home/groups/${t.group.id}`}
+                                  title={`Seat ${t.ticketNo} in ${t.group.group}${t.status === "active" ? "" : ` (${t.status})`}`}
+                                  className="press"
+                                >
+                                  <Badge
+                                    tone={t.status === "active" ? "brand" : "neutral"}
+                                    className="tnum normal-case hover:opacity-80"
+                                  >
+                                    {t.group.group} / {t.ticketNo}
+                                  </Badge>
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                        </TD>
                         <TD className="tnum whitespace-nowrap text-xs">
                           {formatDate(row.createdAt)}
                         </TD>
@@ -484,7 +653,16 @@ export default function ApplicantsTable({
                         </TD>
 
                         <TD>
-                          <div className="flex justify-end">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon-sm" asChild>
+                              <Link
+                                href={`/home/applicants/${row.id}/edit`}
+                                aria-label={`Edit ${name}`}
+                                title="Edit applicant"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Link>
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon-sm"

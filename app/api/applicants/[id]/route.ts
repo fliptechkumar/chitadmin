@@ -3,7 +3,8 @@ import { Prisma, type ApplicantStatus } from "@/lib/generated/prisma"
 
 import { prisma } from "@/lib/prisma"
 import { authorizeApi, denyOutsideBranch } from "@/lib/auth-server"
-import { APPLICANT_LIST_SELECT } from "@/lib/applicant-mapper"
+import { APPLICANT_LIST_SELECT, draftToUpdateData } from "@/lib/applicant-mapper"
+import { emptyApplicant, validateAll, type ApplicantDraft } from "@/lib/applicant-schema"
 
 type Context = { params: Promise<{ id: string }> }
 
@@ -93,6 +94,49 @@ export async function PATCH(request: Request, { params }: Context) {
   const applicant = await prisma.applicant.update({
     where: { id },
     data,
+    select: APPLICANT_LIST_SELECT,
+  })
+
+  return NextResponse.json(applicant)
+}
+
+/**
+ * Full edit from the applicant form. Uses the lighter "edit" rules: imported
+ * members lack most enrolment details, and a correction must not demand them.
+ */
+export async function PUT(request: Request, { params }: Context) {
+  const auth = await authorizeApi(ADMIN_ROLES)
+  if (!auth.ok) return auth.response
+
+  const id = Number((await params).id)
+  if (!Number.isInteger(id)) {
+    return NextResponse.json({ errors: { id: "Invalid applicant id" } }, { status: 400 })
+  }
+
+  const existing = await prisma.applicant.findUnique({
+    where: { id },
+    select: { branch: true },
+  })
+  if (!existing) return notFound()
+
+  const denied = denyOutsideBranch(auth.user, existing.branch)
+  if (denied) return denied
+
+  const body = (await request.json().catch(() => null)) as Partial<ApplicantDraft> | null
+  const draft: ApplicantDraft = { ...emptyApplicant(), ...(body ?? {}) }
+
+  const errors = validateAll(draft, "edit")
+  if (Object.keys(errors).length > 0) {
+    return NextResponse.json({ errors }, { status: 400 })
+  }
+
+  // Moving an applicant is allowed only into a branch the caller also holds.
+  const deniedMove = denyOutsideBranch(auth.user, draft.branch.trim())
+  if (deniedMove) return deniedMove
+
+  const applicant = await prisma.applicant.update({
+    where: { id },
+    data: draftToUpdateData(draft),
     select: APPLICANT_LIST_SELECT,
   })
 

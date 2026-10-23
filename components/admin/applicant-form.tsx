@@ -41,6 +41,7 @@ import {
   type ApplicantDraft,
   type ApplicantErrors,
   type ApplicantStep,
+  type ValidationMode,
 } from "@/lib/applicant-schema"
 import { cn } from "@/lib/utils"
 
@@ -97,19 +98,27 @@ function GroupHeading({ children }: { children: React.ReactNode }) {
 export default function ApplicantForm({
   branches,
   defaultBranch = "",
+  applicant,
 }: {
   /** Branches this admin may file an applicant against. */
   branches: string[]
   defaultBranch?: string
+  /** A saved applicant to edit; without it the form enrols a new one. */
+  applicant?: { id: number; code: string; draft: ApplicantDraft }
 }) {
-  const [draft, setDraft] = useState<ApplicantDraft>(() =>
-    emptyApplicant(defaultBranch || (branches.length === 1 ? branches[0] : ""))
+  const editing = Boolean(applicant)
+  const mode: ValidationMode = editing ? "edit" : "create"
+  const [draft, setDraft] = useState<ApplicantDraft>(
+    () => applicant?.draft ?? emptyApplicant(defaultBranch || (branches.length === 1 ? branches[0] : ""))
   )
   const [step, setStep] = useState<ApplicantStep>("applicant")
   const [errors, setErrors] = useState<ApplicantErrors>({})
   // Steps the user has attempted to leave — only these show a red state, so a
-  // step they have not reached yet is never marked as failing.
-  const [visited, setVisited] = useState<Set<ApplicantStep>>(new Set(["applicant"]))
+  // step they have not reached yet is never marked as failing. An edit starts
+  // with every step already filled in, so all of them count as visited.
+  const [visited, setVisited] = useState<Set<ApplicantStep>>(
+    new Set(editing ? APPLICANT_STEPS : ["applicant"])
+  )
   const [submitting, setSubmitting] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savedCode, setSavedCode] = useState("")
@@ -121,7 +130,7 @@ export default function ApplicantForm({
   const isLastStep = stepIndex === APPLICANT_STEPS.length - 1
 
   const age = ageFrom(draft.dateOfBirth)
-  const allErrors = useMemo(() => validateAll(draft), [draft])
+  const allErrors = useMemo(() => validateAll(draft, mode), [draft, mode])
   const outstanding = Object.keys(allErrors).length
 
   function set<K extends keyof ApplicantDraft>(key: K, value: ApplicantDraft[K]) {
@@ -183,7 +192,7 @@ export default function ApplicantForm({
 
     // Moving forward validates the step being left; going back never blocks.
     if (targetIndex > stepIndex) {
-      const stepErrors = validateStep(step, draft)
+      const stepErrors = validateStep(step, draft, mode)
       if (Object.keys(stepErrors).length > 0) {
         setErrors(stepErrors)
         scrollToTop()
@@ -198,13 +207,13 @@ export default function ApplicantForm({
   }
 
   async function handleSubmit() {
-    const found = validateAll(draft)
+    const found = validateAll(draft, mode)
     if (Object.keys(found).length > 0) {
       // Land the user on the first step that actually has a problem.
       const firstBad = APPLICANT_STEPS.find(
-        (s) => Object.keys(validateStep(s, draft)).length > 0
+        (s) => Object.keys(validateStep(s, draft, mode)).length > 0
       )
-      setErrors(validateStep(firstBad ?? "applicant", draft))
+      setErrors(validateStep(firstBad ?? "applicant", draft, mode))
       setVisited(new Set(APPLICANT_STEPS))
       if (firstBad) setStep(firstBad)
       scrollToTop()
@@ -214,8 +223,8 @@ export default function ApplicantForm({
     setSubmitting(true)
     setSubmitError("")
 
-    const response = await fetch("/api/applicants", {
-      method: "POST",
+    const response = await fetch(applicant ? `/api/applicants/${applicant.id}` : "/api/applicants", {
+      method: applicant ? "PUT" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(draft),
     })
@@ -229,7 +238,7 @@ export default function ApplicantForm({
       // Server-side validation is the authority; surface it on the right step.
       if (payload?.errors && Object.keys(payload.errors).length > 0) {
         const firstBad = APPLICANT_STEPS.find((s) =>
-          Object.keys(validateStep(s, draft)).some((f) => f in payload.errors!)
+          Object.keys(validateStep(s, draft, mode)).some((f) => f in payload.errors!)
         )
         setErrors(payload.errors)
         if (firstBad) setStep(firstBad)
@@ -257,6 +266,29 @@ export default function ApplicantForm({
   }
 
   const fullName = [draft.firstName, draft.lastName].filter(Boolean).join(" ")
+
+  if (saved && applicant) {
+    return (
+      <Card className="reveal-scale p-8 text-center">
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-success-soft text-success-soft-foreground">
+          <CircleCheck className="h-6 w-6" />
+        </div>
+        <h3 className="text-base font-semibold tracking-tight">Applicant updated</h3>
+        <p className="mx-auto mt-1 max-w-sm text-sm text-muted-foreground">
+          Changes to {fullName || "the applicant"}{" "}
+          <span className="tnum font-medium text-foreground">({applicant.code})</span> are saved.
+        </p>
+        <div className="mt-5 flex flex-wrap justify-center gap-2">
+          <Button asChild>
+            <Link href="/home/applicants">Back to applicant list</Link>
+          </Button>
+          <Button variant="outline" onClick={() => setSaved(false)}>
+            Keep editing
+          </Button>
+        </div>
+      </Card>
+    )
+  }
 
   if (saved) {
     return (
@@ -295,7 +327,7 @@ export default function ApplicantForm({
             const Icon = meta.icon
             const active = id === step
             const hasErrors =
-              visited.has(id) && Object.keys(validateStep(id, draft)).length > 0
+              visited.has(id) && Object.keys(validateStep(id, draft, mode)).length > 0
             const complete = visited.has(id) && !hasErrors && index < stepIndex
 
             return (
@@ -871,19 +903,23 @@ export default function ApplicantForm({
 
           <div className="ml-auto flex items-center gap-2">
             {!isLastStep && (
-              <Button onClick={() => goTo(APPLICANT_STEPS[stepIndex + 1])}>
+              <Button
+                variant={editing ? "outline" : "default"}
+                onClick={() => goTo(APPLICANT_STEPS[stepIndex + 1])}
+              >
                 Continue
                 <ArrowRight className="h-4 w-4" />
               </Button>
             )}
-            {isLastStep && (
+            {/* An edit is usually one field, so it can be saved from any step. */}
+            {(isLastStep || editing) && (
               <Button onClick={handleSubmit} disabled={submitting}>
                 {submitting ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                {submitting ? "Saving…" : "Save applicant"}
+                {submitting ? "Saving…" : editing ? "Save changes" : "Save applicant"}
               </Button>
             )}
           </div>
