@@ -65,4 +65,10 @@ export const greeting = () => {
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
 }
 
+/** Months still short, the current one included: earlier arrears plus this month if unpaid. */
+export const monthsPending = (m: { pendingMonths: number; currentDue: number }) =>
+  m.pendingMonths + (m.currentDue > 0 ? 1 : 0)
+
+export const monthsLabel = (n: number) => `${n} month${n === 1 ? '' : 's'}`
+
 export const MODE_LABEL: Record<string, string> = { cash: 'Cash', online: 'Online', cheque: 'Cheque' }

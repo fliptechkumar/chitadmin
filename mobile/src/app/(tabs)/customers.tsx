@@ -12,16 +12,19 @@ import { inr } from '@/lib/format'
 import { useTheme } from '@/theme/theme'
 import { fs, sp } from '@/theme/tokens'
 
-type Filter = 'all' | 'due' | 'overdue' | 'paid' | 'prized'
+type Filter = 'all' | 'pending' | 'due' | 'overdue' | 'paid' | 'prized'
 const FILTERS: [Filter, string][] = [
   ['all', 'All'],
+  ['pending', 'Pending'],
   ['due', 'Due'],
   ['overdue', 'Overdue'],
   ['paid', 'Up to date'],
   ['prized', 'Prized'],
 ]
 
-const matches = (m: Member, f: Filter) => f === 'all' || (f === 'prized' ? m.isPrized : m.status === f)
+/** "Pending" is anyone owing money, this month or earlier; "Due" and "Overdue" split it. */
+const matches = (m: Member, f: Filter) =>
+  f === 'all' || (f === 'prized' ? m.isPrized : f === 'pending' ? m.outstanding > 0 : m.status === f)
 
 export default function Customers() {
   const { c } = useTheme()

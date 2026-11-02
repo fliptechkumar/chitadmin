@@ -16,8 +16,9 @@ import {
 import { Badge, type BadgeTone } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
+import { Combobox } from "@/components/ui/combobox"
 import { EmptyState } from "@/components/ui/empty-state"
-import { SearchInput, Select } from "@/components/ui/input"
+import { Input, SearchInput, Select } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
 import { Skeleton } from "@/components/ui/skeleton"
 import { StatTile } from "@/components/ui/stat-card"
@@ -47,6 +48,9 @@ export type DueRecord = {
 }
 
 export type GroupOption = { id: number; group: string; branchName: string }
+
+/** Filters share each row evenly, so a wrapped row leaves no gap at its end. */
+const FILTER_WIDTH = "w-full sm:w-auto sm:min-w-40 sm:flex-1"
 
 const STATUS_TONE: Record<DueStatus, BadgeTone> = {
   paid: "success",
@@ -119,6 +123,18 @@ export default function DuesTable({
     [groups, branch]
   )
 
+  const groupChoices = useMemo(
+    () => [
+      { value: "", label: "All groups" },
+      ...groupOptions.map((g) => ({
+        value: String(g.id),
+        label: g.group,
+        group: g.branchName,
+      })),
+    ],
+    [groupOptions]
+  )
+
   const totals = useMemo(
     () => ({
       members: rows.length,
@@ -165,7 +181,13 @@ export default function DuesTable({
         showClear={hasFilters}
         onClear={reset}
         actions={
-          <Button variant="outline" onClick={() => void load()} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void load()}
+            disabled={loading}
+            className="h-9"
+          >
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
@@ -179,7 +201,7 @@ export default function DuesTable({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Name, mobile or account no…"
-          className="w-full sm:w-64"
+          className="w-full sm:min-w-64 sm:flex-[2]"
         />
 
         {branches.length > 1 && (
@@ -189,7 +211,8 @@ export default function DuesTable({
               setBranch(e.target.value)
               setGroupId("")
             }}
-            wrapperClassName="w-full sm:w-40"
+            wrapperClassName={FILTER_WIDTH}
+            aria-label="Branch"
           >
             <option value="">All branches</option>
             {branches.map((b) => (
@@ -200,23 +223,22 @@ export default function DuesTable({
           </Select>
         )}
 
-        <Select
+        <Combobox
           value={groupId}
-          onChange={(e) => setGroupId(e.target.value)}
-          wrapperClassName="w-full sm:w-40"
-        >
-          <option value="">All groups</option>
-          {groupOptions.map((g) => (
-            <option key={g.id} value={g.id}>
-              {g.group}
-            </option>
-          ))}
-        </Select>
+          onChange={setGroupId}
+          options={groupChoices}
+          placeholder="All groups"
+          searchPlaceholder="Search groups…"
+          emptyText="No groups match"
+          className={FILTER_WIDTH}
+          aria-label="Group"
+        />
 
         <Select
           value={status}
           onChange={(e) => setStatus(e.target.value)}
-          wrapperClassName="w-full sm:w-36"
+          wrapperClassName={FILTER_WIDTH}
+          aria-label="Status"
         >
           <option value="">All statuses</option>
           {DUE_STATUSES.map((s) => (
@@ -226,11 +248,13 @@ export default function DuesTable({
           ))}
         </Select>
 
-        <SearchInput
+        <Input
           value={ticketNo}
           onChange={(e) => setTicketNo(e.target.value.replace(/\D/g, ""))}
+          inputMode="numeric"
           placeholder="Ticket no"
-          className="w-full sm:w-32"
+          aria-label="Ticket number"
+          className="w-full sm:w-28"
         />
       </Toolbar>
 

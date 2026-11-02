@@ -5,7 +5,7 @@ import { Linking, View } from 'react-native'
 import type { Member } from '@/api/types'
 import { Icon } from '@/components/Icon'
 import { Avatar, Button, Card, IconButton, Pill, StatusPill, Txt } from '@/components/ui'
-import { dShort, inr, titleCase } from '@/lib/format'
+import { dShort, inr, monthsLabel, monthsPending, titleCase } from '@/lib/format'
 import { useTheme } from '@/theme/theme'
 import { fs, sp } from '@/theme/tokens'
 
@@ -16,6 +16,7 @@ export const callNumber = (mobile: string) => {
 /** One member in the Customers list (the prototype's cust-card). */
 export const MemberCard = memo(function MemberCard({ m, onCollect }: { m: Member; onCollect: (m: Member) => void }) {
   const { c } = useTheme()
+  const behind = monthsPending(m)
   const open = () => router.push({ pathname: '/member/[id]', params: { id: String(m.ticketId) } })
   return (
     <Card onPress={open} style={{ marginBottom: sp[3] }}>
@@ -37,7 +38,7 @@ export const MemberCard = memo(function MemberCard({ m, onCollect }: { m: Member
       <View style={{ flexDirection: 'row', marginHorizontal: sp[4], paddingVertical: sp[3], borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.divider }}>
         {[
           ['Instalment', inr(m.monthlyDue), c.ink],
-          ['Pending', inr(m.outstanding), m.outstanding ? c.danger : c.ink],
+          [behind ? `Pending · ${monthsLabel(behind)}` : 'Pending', inr(m.outstanding), m.outstanding ? c.danger : c.ink],
           ['Inst. no', `${m.currentInstallment}/${m.months}`, c.ink],
         ].map(([k, v, col], i) => (
           <View key={k} style={{ flex: 1, paddingLeft: i ? sp[3] : 0 }}>

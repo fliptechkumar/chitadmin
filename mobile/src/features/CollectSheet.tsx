@@ -7,7 +7,7 @@ import type { CollectResult, Member, Mode } from '@/api/types'
 import { invalidateAll } from '@/api/useApi'
 import { Sheet } from '@/components/overlays'
 import { Button, Chip, Field, InlineAlert, KV, Segmented, Txt } from '@/components/ui'
-import { inr, MODE_LABEL, titleCase } from '@/lib/format'
+import { dShort, inr, MODE_LABEL, monthsLabel, monthsPending, titleCase } from '@/lib/format'
 import { useTheme } from '@/theme/theme'
 import { fs, radius, sp } from '@/theme/tokens'
 
@@ -63,6 +63,7 @@ export function CollectSheet({ member: incoming, visible, onClose }: { member: M
   const pending = member.outstanding
   const v = Number(amount) || 0
   const advance = pending === 0
+  const behind = monthsPending(member)
 
   const hint =
     v > pending && pending > 0
@@ -159,6 +160,12 @@ export function CollectSheet({ member: incoming, visible, onClose }: { member: M
           </View>
         ))}
       </View>
+      {behind > 0 && (
+        <InlineAlert tone={member.pendingMonths > 0 ? 'danger' : 'warning'} icon="alertCircle" style={{ marginTop: -sp[2], marginBottom: sp[4] }}>
+          {monthsLabel(behind)} pending
+          {member.nextDueDate ? ` since ${dShort(member.nextDueDate)}` : ''} · {inr(pending)}
+        </InlineAlert>
+      )}
 
       <Field
         label="Amount received"

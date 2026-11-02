@@ -6,24 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { Overview } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { Icon, type IconName } from '@/components/Icon'
-import {
-  Avatar,
-  Card,
-  ErrorState,
-  IconButton,
-  ListGroup,
-  ListRow,
-  RowEnd,
-  RowIcon,
-  SectionHeader,
-  Skeleton,
-  StatTile,
-  Txt,
-} from '@/components/ui'
+import { Avatar, Card, ErrorState, IconButton, ListGroup, ListRow, Press, RowEnd, SectionHeader, Skeleton, Txt } from '@/components/ui'
 import { DenominationSheet } from '@/features/DenominationSheet'
-import { dLong, greeting, inr, MODE_LABEL, timeOf, titleCase } from '@/lib/format'
+import { dLong, greeting, inr, inrShort, MODE_LABEL, timeOf, titleCase } from '@/lib/format'
 import { useTheme } from '@/theme/theme'
-import { fs, radius, shadow, sp } from '@/theme/tokens'
+import { fs, radius, shadow, sp, toneColors, type Tone } from '@/theme/tokens'
 
 export default function Home() {
   const { c, isDark } = useTheme()
@@ -116,43 +103,7 @@ export default function Home() {
         </View>
 
         <SectionHeader title="Overview" link="All customers" onLink={() => toCustomers('all')} />
-        <View style={{ gap: sp[3] }}>
-          <View style={{ flexDirection: 'row', gap: sp[3] }}>
-            <StatTile n={data?.counts.members ?? '—'} label="Total members" icon="users" tone="info" onPress={() => toCustomers('all')} />
-            <StatTile n={data?.counts.paid ?? '—'} label="Up to date" icon="checkCircle" tone="success" onPress={() => toCustomers('paid')} />
-          </View>
-          <View style={{ flexDirection: 'row', gap: sp[3] }}>
-            <StatTile n={data?.counts.due ?? '—'} label="Due this month" icon="calendar" tone="warning" onPress={() => toCustomers('due')} />
-            <StatTile n={data?.counts.overdue ?? '—'} label="Overdue" icon="alert" tone="danger" onPress={() => toCustomers('overdue')} />
-          </View>
-        </View>
-
-        <Card onPress={() => toCustomers('overdue')} style={{ marginTop: sp[3] }}>
-          <ListRow
-            lead={<RowIcon name="clock" tone="danger" />}
-            title="Total arrears"
-            sub={`${data?.arrears.accounts ?? 0} accounts on your route`}
-            end={<RowEnd amount={inr(data?.arrears.amount)} color={c.danger} />}
-            chevron
-          />
-        </Card>
-
-        <Card pad style={{ marginTop: sp[3], flexDirection: 'row' }}>
-          {[
-            ['Prized', String(data?.counts.prized ?? 0)],
-            ['Cash today', inr(data?.today.cash)],
-            ['Online today', inr((data?.today.online ?? 0) + (data?.today.cheque ?? 0))],
-          ].map(([k, v], i) => (
-            <View key={k} style={{ flex: 1, paddingLeft: i ? sp[3] : 0, borderLeftWidth: i ? 1 : 0, borderLeftColor: c.divider }}>
-              <Txt size={fs.xs} muted>
-                {k}
-              </Txt>
-              <Txt weight="bold" num color={c.ink} style={{ marginTop: 3 }} numberOfLines={1} adjustsFontSizeToFit>
-                {v}
-              </Txt>
-            </View>
-          ))}
-        </Card>
+        <OverviewGrid data={data} onFilter={toCustomers} />
 
         <SectionHeader title="Quick actions" />
         <View style={{ flexDirection: 'row', gap: sp[3] }}>
@@ -227,5 +178,52 @@ function QuickAction({ icon, label, onPress, dot }: { icon: IconName; label: str
         {label}
       </Txt>
     </Pressable>
+  )
+}
+
+type Tile = { label: string; value: string; icon: IconName; tone: Tone; onPress?: () => void; alert?: boolean }
+
+/**
+ * The route at a glance as a grid of small tiles, four to a row: a tinted icon,
+ * the figure and a short label. Member tiles open Customers filtered to them.
+ */
+function OverviewGrid({ data, onFilter }: { data: Overview | undefined; onFilter: (filter: string) => void }) {
+  const { c } = useTheme()
+  const n = (v: number | undefined) => (data ? String(v ?? 0) : '—')
+  const amt = (v: number | undefined) => (data ? inrShort(v ?? 0) : '—')
+
+  const tiles: Tile[] = [
+    { label: 'Members', value: n(data?.counts.members), icon: 'users', tone: 'info', onPress: () => onFilter('all') },
+    { label: 'Up to date', value: n(data?.counts.paid), icon: 'checkCircle', tone: 'success', onPress: () => onFilter('paid') },
+    { label: 'Due', value: n(data?.counts.due), icon: 'calendar', tone: 'warning', onPress: () => onFilter('due') },
+    { label: 'Overdue', value: n(data?.counts.overdue), icon: 'alert', tone: 'danger', onPress: () => onFilter('overdue'), alert: !!data?.counts.overdue },
+    { label: 'Arrears', value: amt(data?.arrears.amount), icon: 'clock', tone: 'danger', onPress: () => onFilter('overdue') },
+    { label: 'Prized', value: n(data?.counts.prized), icon: 'trophy', tone: 'violet', onPress: () => onFilter('prized') },
+    { label: 'Cash today', value: amt(data?.today.cash), icon: 'cash', tone: 'success' },
+    { label: 'Online / Chq', value: amt((data?.today.online ?? 0) + (data?.today.cheque ?? 0)), icon: 'upi', tone: 'primary' },
+  ]
+
+  return (
+    <Card style={{ paddingVertical: sp[2] }}>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+        {tiles.map((t) => {
+          const tc = toneColors(c, t.tone)
+          return (
+            <Press key={t.label} onPress={t.onPress} disabled={!t.onPress} style={{ width: '25%', alignItems: 'center', paddingVertical: sp[3], paddingHorizontal: 4, gap: 6 }}>
+              <View style={{ width: 46, height: 46, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: tc.bg }}>
+                <Icon name={t.icon} size={22} color={tc.fg} />
+                {t.alert && <View style={{ position: 'absolute', top: -2, right: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: c.danger, borderWidth: 2, borderColor: c.surface }} />}
+              </View>
+              <Txt weight="bold" num color={c.ink} numberOfLines={1} adjustsFontSizeToFit>
+                {t.value}
+              </Txt>
+              <Txt size={11} muted align="center" numberOfLines={1}>
+                {t.label}
+              </Txt>
+            </Press>
+          )
+        })}
+      </View>
+    </Card>
   )
 }

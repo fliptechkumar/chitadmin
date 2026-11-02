@@ -63,13 +63,13 @@ export type RouteMember = {
   months: number
   isPrized: boolean
   status: MemberStatus
-  /** The month being collected now (latest whose date has passed). */
+  /** The month being collected now: the one falling due this calendar month. */
   currentInstallment: number
   /** That month's instalment. */
   monthlyDue: number
   /** Still owed on that month alone. */
   currentDue: number
-  /** Still owed on months whose date has passed. */
+  /** Still owed on every month up to and including the current one. */
   outstanding: number
   /** Earlier months still short, besides the current one. */
   pendingMonths: number
@@ -183,9 +183,15 @@ function summarize(seat: SeatRow, records: MonthRecord[]): RouteMember {
   const current = position.current
   const short = records.find((r) => r.amount < r.amountDue)
 
+  // Owing nothing yet, a group that has not reached its first month is up to date.
   let status: MemberStatus = "paid"
-  if (position.pendingCount > 0) status = "overdue"
-  else if (position.status === "pending" || position.status === "part_paid") status = "due"
+  if (position.overdue) status = "overdue"
+  else if (
+    position.started &&
+    (position.status === "pending" || position.status === "part_paid")
+  ) {
+    status = "due"
+  }
 
   const a = seat.applicant!
   return {
@@ -203,7 +209,8 @@ function summarize(seat: SeatRow, records: MonthRecord[]): RouteMember {
     status,
     currentInstallment: current?.installmentNo ?? 1,
     monthlyDue: current?.amountDue ?? 0,
-    currentDue: current ? Math.max(0, current.amountDue - current.amountPaid) : 0,
+    currentDue:
+      current && position.started ? Math.max(0, current.amountDue - current.amountPaid) : 0,
     outstanding: position.outstanding,
     pendingMonths: position.pendingCount,
     paidToDate: position.paidToDate,
@@ -263,16 +270,19 @@ export async function routeMemberDetail(routeId: number | null, ticketId: number
         }
       : null,
     records: records.map((r) => {
+      // A month is due from the 1st of the month it falls in and overdue the
+      // day after its due date; later months are upcoming, or paid in advance.
+      const laterMonth = r.dueDate.slice(0, 7) > today.slice(0, 7)
       const status: MonthStatus =
         r.amount >= r.amountDue && r.amountDue > 0
-          ? r.dueDate > today
+          ? laterMonth
             ? "advance"
             : "paid"
           : r.amount > 0
             ? "partial"
-            : r.dueDate > today
+            : laterMonth
               ? "upcoming"
-              : r.installmentNo < member.currentInstallment
+              : r.dueDate < today
                 ? "overdue"
                 : "due"
       return {

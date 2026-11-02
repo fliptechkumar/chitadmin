@@ -5,6 +5,7 @@ import { RefreshControl, ScrollView, View } from 'react-native'
 import type { MemberDetail } from '@/api/types'
 import { useApi } from '@/api/useApi'
 import { Icon, type IconName } from '@/components/Icon'
+import { useOverlay } from '@/components/overlays'
 import {
   AppBar,
   Avatar,
@@ -27,7 +28,7 @@ import {
 import { CollectSheet } from '@/features/CollectSheet'
 import { callNumber } from '@/features/MemberCard'
 import { MonthRow } from '@/features/MonthRow'
-import { dLong, dShort, inr, MODE_LABEL, titleCase } from '@/lib/format'
+import { dLong, dShort, inr, MODE_LABEL, monthsLabel, monthsPending, titleCase } from '@/lib/format'
 import { useTheme } from '@/theme/theme'
 import { fs, sp } from '@/theme/tokens'
 
@@ -36,12 +37,20 @@ export default function MemberScreen() {
   const { id } = useLocalSearchParams<{ id: string }>()
   const { data, error, loading, refreshing, refresh } = useApi<MemberDetail>(`/api/v1/route/members/${id}`)
   const [collect, setCollect] = useState(false)
+  const { toast } = useOverlay()
 
   const m = data?.member
   // Months up to now, newest first: what the agent is asked about at the door.
   const recent = (data?.records ?? []).filter((r) => r.status !== 'upcoming').slice(-4).reverse()
   const paidMonths = (data?.records ?? []).filter((r) => r.amountPaid >= r.amountDue && r.amountDue > 0).length
   const last = data?.receipts[0]
+
+  // Months entered by the office on Collection Records carry no receipt, so a
+  // member can be paid up with nothing to show here; say so rather than doing nothing.
+  function openLast() {
+    if (last) router.push({ pathname: '/receipt/[id]', params: { id: String(last.id) } })
+    else toast('No receipts yet. Payments entered by the office have no receipt.', 'info')
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
@@ -101,6 +110,7 @@ export default function MemberScreen() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', paddingHorizontal: sp[4] }}>
                 {[
                   ['Oldest unpaid', m.outstanding ? dLong(m.nextDueDate) : '—'],
+                  ['Months pending', monthsPending(m) ? monthsLabel(monthsPending(m)) : 'None'],
                   ['Current inst.', `${m.currentInstallment} of ${m.months}`],
                   ['This month', inr(m.monthlyDue)],
                   ['Paid so far', inr(m.paidToDate)],
@@ -166,8 +176,7 @@ export default function MemberScreen() {
                 variant="outline"
                 icon="receipt"
                 title="Last receipt"
-                disabled={!last}
-                onPress={() => last && router.push({ pathname: '/receipt/[id]', params: { id: String(last.id) } })}
+                onPress={openLast}
                 style={{ flex: 1 }}
               />
               <Button icon="wallet" title={m.outstanding ? `Collect ${inr(m.currentDue || m.outstanding)}` : 'Advance'} variant={m.outstanding ? 'primary' : 'secondary'} onPress={() => setCollect(true)} style={{ flex: 1.3 }} />
