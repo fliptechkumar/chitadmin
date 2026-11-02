@@ -71,14 +71,14 @@
     --chart-4: var(--warning);
     --chart-5: var(--danger);
 
-    /* Sidebar follows the theme rather than being permanently dark */
-    --sidebar: oklch(1 0 0);
-    --sidebar-foreground: oklch(0.36 0.02 262);
-    --sidebar-primary: var(--brand);
+    /* Sidebar stays dark in both themes, in the navy of the logo */
+    --sidebar: oklch(0.29 0.075 252);
+    --sidebar-foreground: oklch(0.88 0.02 250);
+    --sidebar-primary: oklch(0.5 0.14 250);
     --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.962 0.006 258);
-    --sidebar-accent-foreground: oklch(0.24 0.022 262);
-    --sidebar-border: oklch(0.922 0.006 258);
+    --sidebar-accent: oklch(1 0 0 / 9%);
+    --sidebar-accent-foreground: oklch(1 0 0);
+    --sidebar-border: oklch(1 0 0 / 11%);
     --sidebar-ring: var(--ring);
 
     --radius: 0.75rem;
@@ -153,13 +153,7 @@
     --destructive: var(--danger);
     --ring: oklch(0.63 0.185 262 / 55%);
 
-    --sidebar: oklch(0.196 0.015 262);
-    --sidebar-foreground: oklch(0.75 0.016 258);
-    --sidebar-primary: var(--brand);
-    --sidebar-primary-foreground: oklch(1 0 0);
-    --sidebar-accent: oklch(0.258 0.019 262);
-    --sidebar-accent-foreground: oklch(0.98 0.004 258);
-    --sidebar-border: oklch(1 0 0 / 8%);
+    --sidebar: oklch(0.23 0.05 254);
 
     --elevation-xs: 0 1px 2px oklch(0 0 0 / 0.35);
     --elevation-sm: 0 1px 2px oklch(0 0 0 / 0.35), 0 2px 6px -2px oklch(0 0 0 / 0.4);

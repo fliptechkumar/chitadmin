@@ -1,5 +1,7 @@
 import "server-only"
 
+import type { Prisma } from "@/lib/generated/prisma"
+
 import { prisma } from "@/lib/prisma"
 import type { Principal } from "@/lib/rbac"
 
@@ -29,6 +31,17 @@ export async function collectionScope(
 ): Promise<Record<string, unknown>> {
   const groups = await allowedGroupNames(principal)
   return groups === null ? {} : { group: { in: groups } }
+}
+
+/** The receipts the Collections page shows: paid, tied to a seat, in scope. */
+export async function registerScope(
+  principal: Principal
+): Promise<Prisma.CollectionWhereInput> {
+  return {
+    ...((await collectionScope(principal)) as Prisma.CollectionWhereInput),
+    ticketId: { not: null },
+    status: "paid",
+  }
 }
 
 /** The branch a group belongs to, or null when the group does not exist. */

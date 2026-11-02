@@ -2,6 +2,8 @@ import "server-only"
 
 import type { NextResponse } from "next/server"
 
+import type { Prisma } from "@/lib/generated/prisma"
+
 import { prisma } from "@/lib/prisma"
 import { getCompany } from "@/lib/company"
 import { activeScheduleFor } from "@/lib/chit-interval-server"
@@ -125,9 +127,15 @@ const SEAT_SELECT = {
 
 type SeatRow = NonNullable<Awaited<ReturnType<typeof loadSeat>>>
 
-function loadSeat(ticketId: number, routeId: number) {
+/** A seated member; a null `routeId` finds them on whichever route they are. */
+function loadSeat(ticketId: number, routeId: number | null) {
   return prisma.chitTicket.findFirst({
-    where: { id: ticketId, routeId, applicantId: { not: null }, isCompany: false },
+    where: {
+      id: ticketId,
+      ...(routeId === null ? {} : { routeId }),
+      applicantId: { not: null },
+      isCompany: false,
+    },
     select: SEAT_SELECT,
   })
 }
@@ -216,7 +224,7 @@ export async function routeMembers(routeId: number): Promise<RouteMember[]> {
 
 export type MonthStatus = "paid" | "partial" | "overdue" | "due" | "upcoming" | "advance"
 
-export async function routeMemberDetail(routeId: number, ticketId: number) {
+export async function routeMemberDetail(routeId: number | null, ticketId: number) {
   const seat = await loadSeat(ticketId, routeId)
   if (!seat) return null
 
@@ -337,9 +345,18 @@ export function receiptRow(c: ReceiptRowInput) {
 }
 
 /** Everything the receipt screen and the printed slip show. */
-export async function routeReceipt(routeId: number, collectionId: number) {
+export function routeReceipt(routeId: number, collectionId: number) {
+  return receiptWhere({ id: collectionId, routeId })
+}
+
+/**
+ * The first receipt matching `where`, with the seat's balance as it stands
+ * now. The member is looked up on any route, since they may have moved since
+ * the receipt was written.
+ */
+export async function receiptWhere(where: Prisma.CollectionWhereInput) {
   const c = await prisma.collection.findFirst({
-    where: { id: collectionId, routeId },
+    where,
     select: {
       ...RECEIPT_ROW_SELECT,
       note: true,
@@ -357,7 +374,7 @@ export async function routeReceipt(routeId: number, collectionId: number) {
 
   const [company, detail] = await Promise.all([
     getCompany(),
-    c.ticketId ? routeMemberDetail(routeId, c.ticketId) : null,
+    c.ticketId ? routeMemberDetail(null, c.ticketId) : null,
   ])
 
   return {

@@ -1,15 +1,17 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import { CheckCircle, Plus, Printer, ReceiptText } from "lucide-react"
+import { useEffect, useState } from "react"
+import { Eye, ReceiptText } from "lucide-react"
 
-import Modal from "@/components/admin/modal"
+import ReceiptDialog from "@/components/admin/receipt-dialog"
 import { Badge, toneFor } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardHeader, CardTitle } from "@/components/ui/card"
+import { Combobox } from "@/components/ui/combobox"
 import { EmptyState } from "@/components/ui/empty-state"
-import { Field, Input, SearchInput, Select } from "@/components/ui/input"
+import { Input, SearchInput, Select } from "@/components/ui/input"
 import { Pagination } from "@/components/ui/pagination"
+import { Skeleton } from "@/components/ui/skeleton"
 import { StatTile } from "@/components/ui/stat-card"
 import {
   Table,
@@ -21,117 +23,140 @@ import {
   TR,
 } from "@/components/ui/table"
 import { Toolbar } from "@/components/ui/toolbar"
-import { inr, inrCompact, todayDisplay } from "@/lib/format"
-import { ALL_GROUPS, COLLECTIONS, type Collection } from "@/lib/mock-data"
-import { cn } from "@/lib/utils"
+import type { RegisterFilters, RegisterPage } from "@/lib/collection-register"
+import { COLLECTION_MODES } from "@/lib/collection-schema"
+import { shiftIsoDay } from "@/lib/denomination"
+import { inr, inrCompact } from "@/lib/format"
 
-const MODES: Collection["mode"][] = ["cash", "online", "cheque"]
+const COLUMNS = [
+  "Receipt no",
+  "Customer",
+  "Group",
+  "Inst.",
+  "Amount",
+  "Mode",
+  "Date",
+  "Route",
+  "Collected by",
+  "",
+]
 
-function emptyForm() {
-  return {
-    customerName: "",
-    group: "",
-    installment: "",
-    amount: "",
-    mode: "cash" as Collection["mode"],
-    date: todayDisplay(),
-    collectedBy: "Suresh Kumar",
-    penalty: "0",
-  }
-}
+const SEARCH_DELAY_MS = 300
+
+const NO_FILTERS = { mode: "", route: "", group: "", collector: "", from: "", to: "" }
+
+/** Today, yyyy-mm-dd, on the branches' calendar. */
+const today = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })
+
+const PERIODS = [
+  { value: "today", label: "Today", range: (t: string) => [t, t] },
+  {
+    value: "yesterday",
+    label: "Yesterday",
+    range: (t: string) => [shiftIsoDay(t, -1), shiftIsoDay(t, -1)],
+  },
+  { value: "week", label: "Last 7 days", range: (t: string) => [shiftIsoDay(t, -6), t] },
+  { value: "month", label: "This month", range: (t: string) => [`${t.slice(0, 8)}01`, t] },
+]
 
 export default function CollectionsPage() {
-  const [data, setData] = useState<Collection[]>(COLLECTIONS)
   const [search, setSearch] = useState("")
-  const [modeFilter, setModeFilter] = useState("")
-  const [statusFilter, setStatusFilter] = useState("")
+  const [term, setTerm] = useState("")
+  const [filters, setFilters] = useState(NO_FILTERS)
   const [page, setPage] = useState(1)
-  const [rowsPerPage, setRows] = useState(5)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(emptyForm)
-  /** Row that was just settled, highlighted briefly as confirmation. */
-  const [flashId, setFlashId] = useState<number | null>(null)
+  const [rowsPerPage, setRows] = useState(20)
+  const [attempt, setAttempt] = useState(0)
+  const [options, setOptions] = useState<RegisterFilters | null>(null)
+  const [openReceipt, setOpenReceipt] = useState<number | null>(null)
 
-  const hasFilters = Boolean(search || modeFilter || statusFilter)
+  const [data, setData] = useState<RegisterPage | null>(null)
+  const [error, setError] = useState("")
+  /** The request `data` or `error` belongs to; anything else is still loading. */
+  const [settled, setSettled] = useState("")
 
-  function handleClear() {
-    setSearch("")
-    setModeFilter("")
-    setStatusFilter("")
+  const hasFilters = Boolean(search || Object.values(filters).some(Boolean))
+
+  // Wait for a pause in typing rather than querying on every keystroke.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTerm(search.trim())
+      setPage(1)
+    }, SEARCH_DELAY_MS)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  const query = new URLSearchParams({
+    page: String(page),
+    limit: String(rowsPerPage),
+    ...(term ? { q: term } : {}),
+    ...Object.fromEntries(Object.entries(filters).filter(([, value]) => value)),
+  }).toString()
+  const requestKey = `${query}#${attempt}`
+  const loading = settled !== requestKey
+
+  useEffect(() => {
+    const controller = new AbortController()
+
+    async function load() {
+      try {
+        const response = await fetch(`/api/collections?${query}`, {
+          signal: controller.signal,
+        })
+        const body = (await response.json().catch(() => null)) as
+          | (RegisterPage & { error?: string })
+          | null
+        if (!response.ok || !body) {
+          throw new Error(body?.error ?? "Could not load collections.")
+        }
+        setData(body)
+        setError("")
+      } catch (e) {
+        if (controller.signal.aborted) return
+        setError(e instanceof Error ? e.message : "Could not load collections.")
+      }
+      setSettled(requestKey)
+    }
+
+    void load()
+    return () => controller.abort()
+  }, [query, requestKey])
+
+  // A failure only leaves these menus short; the register still works.
+  useEffect(() => {
+    const controller = new AbortController()
+    fetch("/api/collections/filters", { signal: controller.signal })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: RegisterFilters | null) => setOptions(body))
+      .catch(() => {})
+    return () => controller.abort()
+  }, [])
+
+  function setFilter(next: Partial<typeof NO_FILTERS>) {
+    setFilters((f) => ({ ...f, ...next }))
     setPage(1)
   }
 
-  function handleSubmit() {
-    if (!form.customerName || !form.amount) return
-    const newId = Math.max(0, ...data.map((c) => c.id)) + 1
-    setData((d) => [
-      ...d,
-      {
-        id: newId,
-        receiptNo: `RCP-2026-${String(newId).padStart(3, "0")}`,
-        customerId: 0,
-        customerName: form.customerName,
-        group: form.group,
-        installment: Number(form.installment),
-        amount: Number(form.amount),
-        mode: form.mode,
-        date: form.date,
-        collectedBy: form.collectedBy,
-        status: "paid",
-        penalty: Number(form.penalty),
-      },
-    ])
-    setForm(emptyForm())
-    setShowForm(false)
+  function handlePeriod(value: string) {
+    const period = PERIODS.find((p) => p.value === value)
+    const [from, to] = period ? period.range(today()) : ["", ""]
+    setFilter({ from, to })
   }
 
-  function markPaid(id: number) {
-    setData((d) =>
-      d.map((c) => (c.id === id ? { ...c, status: "paid", penalty: 0 } : c))
-    )
-    setFlashId(id)
-    setTimeout(() => setFlashId((current) => (current === id ? null : current)), 1200)
+  function handleClear() {
+    setSearch("")
+    setTerm("")
+    setFilters(NO_FILTERS)
+    setPage(1)
   }
 
-  const filtered = useMemo(
-    () =>
-      data.filter((c) => {
-        const q = search.toLowerCase()
-        const matchSearch =
-          !q ||
-          c.customerName.toLowerCase().includes(q) ||
-          c.receiptNo.toLowerCase().includes(q) ||
-          c.group.toLowerCase().includes(q)
-        return (
-          matchSearch &&
-          (!modeFilter || c.mode === modeFilter) &&
-          (!statusFilter || c.status === statusFilter)
-        )
-      }),
-    [data, search, modeFilter, statusFilter]
-  )
+  const rows = data?.rows ?? []
+  const stats = data?.stats
+  const totalPages = data?.totalPages ?? 1
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage))
-  const safePage = Math.min(page, totalPages)
-  const pageRows = filtered.slice(
-    (safePage - 1) * rowsPerPage,
-    safePage * rowsPerPage
-  )
-
-  const today = todayDisplay()
-  const stats = {
-    todayTotal: data
-      .filter((c) => c.date === today)
-      .reduce((s, c) => s + c.amount, 0),
-    totalPaid: data
-      .filter((c) => c.status === "paid")
-      .reduce((s, c) => s + c.amount, 0),
-    totalPending: data
-      .filter((c) => c.status === "pending")
-      .reduce((s, c) => s + c.amount, 0),
-    overdueCount: data.filter((c) => c.status === "overdue").length,
-    totalPenalty: data.reduce((s, c) => s + c.penalty, 0),
-  }
+  const activePeriod = PERIODS.find((p) => {
+    const [from, to] = p.range(today())
+    return from === filters.from && to === filters.to
+  })
 
   return (
     <div className="space-y-4">
@@ -139,87 +164,126 @@ export default function CollectionsPage() {
         <StatTile
           index={0}
           label="Today collected"
-          value={stats.todayTotal}
+          value={stats?.todayTotal ?? 0}
           format={inrCompact}
           tone="brand"
         />
         <StatTile
           index={1}
-          label="Total paid"
-          value={stats.totalPaid}
+          label={hasFilters ? `Selected · ${stats?.receiptCount ?? 0}` : `All · ${stats?.receiptCount ?? 0}`}
+          value={stats?.receiptsTotal ?? 0}
           format={inrCompact}
           tone="success"
         />
         <StatTile
           index={2}
-          label="Pending"
-          value={stats.totalPending}
+          label="Cash"
+          value={stats?.byMode.cash ?? 0}
           format={inrCompact}
-          tone="warning"
         />
         <StatTile
           index={3}
-          label="Overdue count"
-          value={stats.overdueCount}
-          tone="danger"
+          label="Online"
+          value={stats?.byMode.online ?? 0}
+          format={inrCompact}
         />
         <StatTile
           index={4}
-          label="Total penalties"
-          value={stats.totalPenalty}
+          label="Cheque"
+          value={stats?.byMode.cheque ?? 0}
           format={inrCompact}
-          tone="danger"
         />
       </div>
 
-      <Toolbar
-        showClear={hasFilters}
-        onClear={handleClear}
-        actions={
-          <Button size="sm" onClick={() => setShowForm(true)}>
-            <Plus className="h-3.5 w-3.5" />
-            New entry
-          </Button>
-        }
-      >
+      <Toolbar showClear={hasFilters} onClear={handleClear}>
         <SearchInput
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value)
-            setPage(1)
-          }}
-          placeholder="Search receipt, customer or group…"
-          className="min-w-[220px] flex-1"
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search receipt, member, account, mobile, group or UTR…"
+          className="min-w-[260px] flex-1"
         />
         <Select
-          value={modeFilter}
-          onChange={(e) => {
-            setModeFilter(e.target.value)
-            setPage(1)
-          }}
+          value={activePeriod?.value ?? (filters.from || filters.to ? "custom" : "")}
+          onChange={(e) => handlePeriod(e.target.value)}
           wrapperClassName="w-36"
-          aria-label="Payment mode"
+          aria-label="Period"
         >
-          <option value="">All modes</option>
-          {MODES.map((m) => (
-            <option key={m} value={m} className="capitalize">
-              {m}
+          <option value="">All dates</option>
+          {PERIODS.map((p) => (
+            <option key={p.value} value={p.value}>
+              {p.label}
+            </option>
+          ))}
+          {!activePeriod && (filters.from || filters.to) && (
+            <option value="custom">Custom</option>
+          )}
+        </Select>
+        <Input
+          type="date"
+          value={filters.from}
+          max={filters.to || undefined}
+          onChange={(e) => setFilter({ from: e.target.value })}
+          className="tnum w-40"
+          aria-label="From date"
+        />
+        <Input
+          type="date"
+          value={filters.to}
+          min={filters.from || undefined}
+          onChange={(e) => setFilter({ to: e.target.value })}
+          className="tnum w-40"
+          aria-label="To date"
+        />
+        <Select
+          value={filters.route}
+          onChange={(e) => setFilter({ route: e.target.value })}
+          wrapperClassName="w-40"
+          aria-label="Route"
+        >
+          <option value="">All routes</option>
+          {options?.routes.map((r) => (
+            <option key={r.id} value={r.id}>
+              {r.code} · {r.name}
+            </option>
+          ))}
+        </Select>
+        <Combobox
+          value={filters.group}
+          onChange={(group) => setFilter({ group })}
+          options={[
+            { value: "", label: "All groups" },
+            ...(options?.groups.map((g) => ({ value: g, label: g })) ?? []),
+          ]}
+          placeholder="All groups"
+          searchPlaceholder="Search groups…"
+          className="w-40"
+          aria-label="Group"
+        />
+        <Select
+          value={filters.collector}
+          onChange={(e) => setFilter({ collector: e.target.value })}
+          wrapperClassName="w-40"
+          aria-label="Collected by"
+        >
+          <option value="">All collectors</option>
+          {options?.collectors.map((c) => (
+            <option key={c} value={c}>
+              {c}
             </option>
           ))}
         </Select>
         <Select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value)
-            setPage(1)
-          }}
+          value={filters.mode}
+          onChange={(e) => setFilter({ mode: e.target.value })}
           wrapperClassName="w-36"
-          aria-label="Status"
+          aria-label="Payment mode"
         >
-          <option value="">All status</option>
-          <option value="paid">Paid</option>
-          <option value="pending">Pending</option>
-          <option value="overdue">Overdue</option>
+          <option value="">All modes</option>
+          {COLLECTION_MODES.map((m) => (
+            <option key={m} value={m} className="capitalize">
+              {m}
+            </option>
+          ))}
         </Select>
       </Toolbar>
 
@@ -231,73 +295,72 @@ export default function CollectionsPage() {
           <CardTitle>
             Collection register
             <span className="tnum ml-2 text-xs font-normal text-muted-foreground">
-              {filtered.length} records
+              {data?.total ?? 0} records
             </span>
           </CardTitle>
-          <Button variant="outline" size="sm">
-            <Printer className="h-3.5 w-3.5" />
-            Print
-          </Button>
         </CardHeader>
 
         <TableWrap>
           <Table>
             <THead>
               <tr>
-                {[
-                  "Receipt no",
-                  "Customer",
-                  "Group",
-                  "Inst.",
-                  "Amount",
-                  "Penalty",
-                  "Mode",
-                  "Date",
-                  "Collected by",
-                  "Status",
-                  "",
-                ].map((h, i) => (
-                  <TH key={`${h}-${i}`}>{h}</TH>
+                {COLUMNS.map((h) => (
+                  <TH key={h}>{h}</TH>
                 ))}
               </tr>
             </THead>
-            <TBody key={`${safePage}-${filtered.length}`}>
-              {pageRows.length === 0 ? (
+            <TBody>
+              {error ? (
                 <tr>
-                  <td colSpan={11}>
+                  <td colSpan={COLUMNS.length}>
+                    <EmptyState
+                      icon={<ReceiptText className="h-5 w-5" />}
+                      title="Could not load collections"
+                      description={error}
+                      action={
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setAttempt((a) => a + 1)}
+                        >
+                          Try again
+                        </Button>
+                      }
+                    />
+                  </td>
+                </tr>
+              ) : loading && !data ? (
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    <td colSpan={COLUMNS.length} className="px-4 py-2">
+                      <Skeleton className="h-6" />
+                    </td>
+                  </tr>
+                ))
+              ) : rows.length === 0 ? (
+                <tr>
+                  <td colSpan={COLUMNS.length}>
                     <EmptyState
                       icon={<ReceiptText className="h-5 w-5" />}
                       title="No collections found"
                       description={
                         hasFilters
                           ? "Try relaxing the filters above."
-                          : "Record your first receipt to get started."
+                          : "Receipts appear here as routes collect in the mobile app."
                       }
                       action={
                         hasFilters ? (
                           <Button variant="outline" size="sm" onClick={handleClear}>
                             Clear filters
                           </Button>
-                        ) : (
-                          <Button size="sm" onClick={() => setShowForm(true)}>
-                            <Plus className="h-3.5 w-3.5" />
-                            New entry
-                          </Button>
-                        )
+                        ) : undefined
                       }
                     />
                   </td>
                 </tr>
               ) : (
-                pageRows.map((c, idx) => (
-                  <TR
-                    key={c.id}
-                    index={idx}
-                    className={cn(
-                      "group transition-colors duration-500",
-                      flashId === c.id && "bg-success-soft"
-                    )}
-                  >
+                rows.map((c, idx) => (
+                  <TR key={c.id} index={idx}>
                     <TD className="font-mono text-xs">{c.receiptNo}</TD>
                     <TD className="font-medium text-foreground">{c.customerName}</TD>
                     <TD>{c.group}</TD>
@@ -305,45 +368,29 @@ export default function CollectionsPage() {
                     <TD className="tnum font-semibold text-foreground">
                       {inr(c.amount)}
                     </TD>
-                    <TD className="tnum">
-                      {c.penalty > 0 ? (
-                        <span className="font-semibold text-danger-soft-foreground">
-                          {inr(c.penalty)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground/60">—</span>
-                      )}
-                    </TD>
                     <TD>
                       <Badge tone={toneFor(c.mode)}>{c.mode}</Badge>
+                      {c.reference && (
+                        <span className="tnum mt-0.5 block text-2xs text-muted-foreground">
+                          {c.reference}
+                        </span>
+                      )}
                     </TD>
                     <TD className="tnum whitespace-nowrap">{c.date}</TD>
+                    <TD className="whitespace-nowrap">
+                      {c.route ?? <span className="text-muted-foreground/60">—</span>}
+                    </TD>
                     <TD className="whitespace-nowrap">{c.collectedBy}</TD>
                     <TD>
-                      <Badge tone={toneFor(c.status)}>{c.status}</Badge>
-                    </TD>
-                    <TD>
-                      <div className="flex items-center gap-1.5">
-                        {c.status !== "paid" && (
-                          <Button
-                            variant="success"
-                            size="xs"
-                            onClick={() => markPaid(c.id)}
-                            title="Mark as paid"
-                          >
-                            <CheckCircle />
-                            Pay
-                          </Button>
-                        )}
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          aria-label={`Print ${c.receiptNo}`}
-                          className="opacity-60 transition-opacity group-hover:opacity-100"
-                        >
-                          <Printer />
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setOpenReceipt(c.id)}
+                        aria-label={`View receipt ${c.receiptNo}`}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        View
+                      </Button>
                     </TD>
                   </TR>
                 ))
@@ -353,9 +400,9 @@ export default function CollectionsPage() {
         </TableWrap>
 
         <Pagination
-          page={safePage}
+          page={Math.min(page, totalPages)}
           totalPages={totalPages}
-          totalRows={filtered.length}
+          totalRows={data?.total ?? 0}
           rowsPerPage={rowsPerPage}
           onPageChange={setPage}
           onRowsChange={(r) => {
@@ -365,99 +412,7 @@ export default function CollectionsPage() {
         />
       </Card>
 
-      <Modal
-        open={showForm}
-        onClose={() => setShowForm(false)}
-        title="New collection entry"
-        description="A receipt number is generated automatically on save."
-        footer={
-          <>
-            <Button variant="outline" size="sm" onClick={() => setShowForm(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={handleSubmit}>
-              Save &amp; generate receipt
-            </Button>
-          </>
-        }
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Customer name">
-            <Input
-              value={form.customerName}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, customerName: e.target.value }))
-              }
-              placeholder="Rajesh Kumar"
-            />
-          </Field>
-          <Field label="Group">
-            <Select
-              value={form.group}
-              onChange={(e) => setForm((f) => ({ ...f, group: e.target.value }))}
-            >
-              <option value="">Select group</option>
-              {ALL_GROUPS.map((g) => (
-                <option key={g.group} value={g.group}>
-                  {g.group}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Installment no.">
-            <Input
-              type="number"
-              min={1}
-              value={form.installment}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, installment: e.target.value }))
-              }
-              placeholder="1"
-            />
-          </Field>
-          <Field label="Amount (₹)">
-            <Input
-              type="number"
-              min={0}
-              value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-              placeholder="5000"
-            />
-          </Field>
-          <Field label="Payment mode">
-            <Select
-              value={form.mode}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, mode: e.target.value as Collection["mode"] }))
-              }
-              className="capitalize"
-            >
-              {MODES.map((m) => (
-                <option key={m} value={m} className="capitalize">
-                  {m}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Penalty (₹)">
-            <Input
-              type="number"
-              min={0}
-              value={form.penalty}
-              onChange={(e) => setForm((f) => ({ ...f, penalty: e.target.value }))}
-              placeholder="0"
-            />
-          </Field>
-          <Field label="Collected by" className="sm:col-span-2">
-            <Input
-              value={form.collectedBy}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, collectedBy: e.target.value }))
-              }
-            />
-          </Field>
-        </div>
-      </Modal>
+      <ReceiptDialog id={openReceipt} onClose={() => setOpenReceipt(null)} />
     </div>
   )
 }

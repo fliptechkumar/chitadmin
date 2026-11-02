@@ -6,14 +6,14 @@ import { useCallback, useEffect, useRef, useState } from "react"
 import { useTheme } from "next-themes"
 import {
   Bell,
-  ChevronLeft,
   ChevronDown,
-  ChevronRight,
   Loader2,
   LogOut,
   Menu,
   Moon,
   KeyRound,
+  PanelLeftClose,
+  PanelLeftOpen,
   Search,
   Sun,
   UserRound,
@@ -196,27 +196,22 @@ export default function AdminShell({
         {/* Brand */}
         <div
           className={cn(
-            // Taller than a standard bar so an uploaded logo — often a circular
-            // badge with lettering inside — is legible rather than a smudge.
-            "flex h-20 shrink-0 items-center border-b border-sidebar-border transition-all duration-300",
-            collapsed ? "justify-center px-0" : "gap-3 px-4"
+            "flex h-[76px] shrink-0 items-center transition-all duration-300",
+            collapsed ? "justify-center px-0" : "gap-3 px-5"
           )}
         >
           <CompanyMark
             company={company}
-            className={cn(
-              "transition-[height,width] duration-300",
-              collapsed ? "h-12 w-12" : "h-14 w-14"
-            )}
-            iconClassName="h-6 w-6"
+            className="h-11 w-11 transition-[height,width] duration-300"
+            iconClassName="h-5 w-5"
           />
           {!collapsed && (
             <div className="animate-fade-in min-w-0 flex-1">
               <p className="truncate text-sm font-bold tracking-tight text-sidebar-accent-foreground">
-                {company.shortName}
-              </p>
-              <p className="truncate text-2xs text-muted-foreground">
                 {company.name}
+              </p>
+              <p className="truncate text-2xs font-medium uppercase tracking-[0.18em] text-sidebar-foreground/60">
+                Admin
               </p>
             </div>
           )}
@@ -225,7 +220,7 @@ export default function AdminShell({
               type="button"
               onClick={() => setSidebarOpen(false)}
               aria-label="Close menu"
-              className="press rounded-lg p-1.5 text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:hidden"
+              className="press rounded-lg p-1.5 text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:hidden"
             >
               <X className="h-4 w-4" />
             </button>
@@ -236,7 +231,7 @@ export default function AdminShell({
         <div
           ref={navRef}
           className={cn(
-            "hide-scrollbar relative flex-1 px-3 py-4",
+            "hide-scrollbar relative flex-1 px-3 pb-4 pt-1",
             // Collapsed, the rail's tooltips and flyouts hang outside it; a
             // scroll container would clip them. The icon rail fits unscrolled.
             collapsed ? "overflow-visible" : "overflow-y-auto overflow-x-hidden"
@@ -246,7 +241,7 @@ export default function AdminShell({
             <span
               aria-hidden
               className={cn(
-                "absolute left-3 right-3 top-0 rounded-lg bg-brand shadow-brand",
+                "absolute left-3 right-3 top-0 rounded-lg bg-sidebar-primary",
                 // Only animate once it has been placed, otherwise it slides in
                 // from the top of the nav on first paint.
                 pillReady && "transition-[transform,height] duration-300 ease-out-expo"
@@ -258,7 +253,7 @@ export default function AdminShell({
           {sections.map((section, sectionIndex) => (
             <div key={section.title} className={cn(sectionIndex > 0 && "mt-5")}>
               {!collapsed && (
-                <p className="mb-1.5 px-3 text-2xs font-semibold uppercase tracking-[0.15em] text-muted-foreground/70">
+                <p className="mb-1.5 px-3 text-2xs font-semibold uppercase tracking-[0.15em] text-sidebar-foreground/55">
                   {section.title}
                 </p>
               )}
@@ -283,7 +278,7 @@ export default function AdminShell({
                             className={cn(
                               "reveal-left relative z-10 flex h-10 items-center justify-center rounded-lg text-sm font-medium transition-colors duration-200",
                               childActive
-                                ? "text-brand-foreground"
+                                ? "text-sidebar-primary-foreground"
                                 : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                             )}
                             aria-label={label}
@@ -304,7 +299,7 @@ export default function AdminShell({
                             className={cn(
                               "reveal-left relative z-10 flex h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium transition-colors duration-200",
                               childActive && !open
-                                ? "text-brand-foreground"
+                                ? "text-sidebar-primary-foreground"
                                 : childActive
                                   ? "text-sidebar-accent-foreground hover:bg-sidebar-accent"
                                   : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -341,7 +336,7 @@ export default function AdminShell({
                                       className={cn(
                                         "relative z-10 flex h-9 items-center rounded-lg px-3 text-[13px] font-medium transition-colors duration-200",
                                         active
-                                          ? "text-brand-foreground"
+                                          ? "text-sidebar-primary-foreground"
                                           : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                                       )}
                                     >
@@ -397,7 +392,7 @@ export default function AdminShell({
                           "reveal-left relative z-10 flex h-10 items-center rounded-lg text-sm font-medium transition-colors duration-200",
                           collapsed ? "justify-center px-0" : "gap-3 px-3",
                           active
-                            ? "text-brand-foreground"
+                            ? "text-sidebar-primary-foreground"
                             : "text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
                         )}
                       >
@@ -420,72 +415,55 @@ export default function AdminShell({
 
         {/* Account */}
         <div className="shrink-0 border-t border-sidebar-border p-3">
-          {collapsed ? (
-            <div className="flex flex-col items-center gap-1.5">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand text-xs font-bold uppercase text-brand-foreground">
-                {initials}
-              </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={loggingOut}
-                aria-label="Logout"
-                className="press flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground hover:bg-danger-soft hover:text-danger-soft-foreground disabled:opacity-60"
-              >
-                {loggingOut ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <LogOut className="h-4 w-4" />
-                )}
-              </button>
+          <div
+            className={cn(
+              "flex items-center",
+              collapsed ? "flex-col gap-1.5" : "gap-2.5 px-1"
+            )}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-xs font-bold uppercase text-sidebar-accent-foreground">
+              {initials}
             </div>
-          ) : (
-            <>
-              <div className="flex items-center gap-3 rounded-lg bg-sidebar-accent px-3 py-2.5">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-bold uppercase text-brand-foreground">
-                  {initials}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-sidebar-accent-foreground">
-                    {user.name}
-                  </p>
-                  <p className="truncate text-2xs text-muted-foreground">
-                    {ROLE_LABELS[user.role]}
-                    {user.branches.length > 0 && ` · ${user.branches.join(", ")}`}
-                  </p>
-                </div>
+            {!collapsed && (
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-sidebar-accent-foreground">
+                  {user.name}
+                </p>
+                <p className="truncate text-2xs text-sidebar-foreground/60">
+                  {ROLE_LABELS[user.role]}
+                  {user.branches.length > 0 && ` · ${user.branches.join(", ")}`}
+                </p>
               </div>
-              <button
-                type="button"
-                onClick={handleLogout}
-                disabled={loggingOut}
-                className="press mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground hover:bg-danger-soft hover:text-danger-soft-foreground disabled:opacity-60"
-              >
-                {loggingOut ? (
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
-                ) : (
-                  <LogOut className="h-4 w-4 shrink-0" />
-                )}
-                {loggingOut ? "Signing out…" : "Logout"}
-              </button>
-            </>
-          )}
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={loggingOut}
+              aria-label="Logout"
+              title="Logout"
+              className="press flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-60"
+            >
+              {loggingOut ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <LogOut className="h-4 w-4" />
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={toggleCollapsed}
+              aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+              className="press hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-sidebar-foreground/70 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground lg:flex"
+            >
+              {collapsed ? (
+                <PanelLeftOpen className="h-4 w-4" />
+              ) : (
+                <PanelLeftClose className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </div>
-
-        {/* Collapse handle */}
-        <button
-          type="button"
-          onClick={toggleCollapsed}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          // Sits just below the brand header (h-20), centred on its border.
-          className="press absolute -right-3 top-[86px] z-50 hidden h-6 w-6 items-center justify-center rounded-full border border-border bg-card text-muted-foreground shadow-sm hover:text-foreground lg:flex"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-3.5 w-3.5" />
-          ) : (
-            <ChevronLeft className="h-3.5 w-3.5" />
-          )}
-        </button>
       </aside>
 
       {/* Main column */}
