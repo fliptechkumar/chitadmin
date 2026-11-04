@@ -12,6 +12,9 @@ import { dLong, greeting, inr, inrShort, MODE_LABEL, timeOf, titleCase } from '@
 import { useTheme } from '@/theme/theme'
 import { fs, radius, shadow, sp, toneColors, type Tone } from '@/theme/tokens'
 
+/** The summary card's navy, from the company logo; a touch lighter at night. */
+const HERO = { light: '#0D3B66', dark: '#14497C' }
+
 export default function Home() {
   const { c, isDark } = useTheme()
   const insets = useSafeAreaInsets()
@@ -55,8 +58,9 @@ export default function Home() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={c.primary} colors={[c.primary]} />}
       >
         {/* Hero */}
-        <View style={{ backgroundColor: c.primary, borderRadius: radius.xl, padding: sp[5], overflow: 'hidden' }}>
+        <View style={{ backgroundColor: isDark ? HERO.dark : HERO.light, borderRadius: radius.xl, padding: sp[5], overflow: 'hidden' }}>
           <View style={{ position: 'absolute', right: -40, top: -50, width: 180, height: 180, borderRadius: 90, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+          <View style={{ position: 'absolute', left: -60, bottom: -80, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(41,140,214,0.18)' }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Txt size={fs.sm} weight="semibold" color="rgba(255,255,255,0.85)">
               Today&apos;s collection
@@ -142,7 +146,6 @@ export default function Home() {
 }
 
 function HeroButton({ icon, label, onPress, primary }: { icon: IconName; label: string; onPress: () => void; primary?: boolean }) {
-  const { c } = useTheme()
   return (
     <Pressable
       onPress={onPress}
@@ -158,8 +161,8 @@ function HeroButton({ icon, label, onPress, primary }: { icon: IconName; label: 
         transform: [{ scale: pressed ? 0.98 : 1 }],
       })}
     >
-      <Icon name={icon} size={18} color={primary ? c.primary : '#fff'} strokeWidth={2.1} />
-      <Txt size={fs.sm} weight="bold" color={primary ? c.primary : '#fff'}>
+      <Icon name={icon} size={18} color={primary ? HERO.light : '#fff'} strokeWidth={2.1} />
+      <Txt size={fs.sm} weight="bold" color={primary ? HERO.light : '#fff'}>
         {label}
       </Txt>
     </Pressable>

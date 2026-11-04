@@ -230,6 +230,7 @@ export function IconButton({
   size = 20,
   filled,
   color,
+  loading,
 }: {
   name: IconName
   onPress?: () => void
@@ -237,14 +238,18 @@ export function IconButton({
   size?: number
   filled?: boolean
   color?: string
+  /** Shows a spinner and ignores taps, for actions that take a moment. */
+  loading?: boolean
 }) {
   const { c, isDark } = useTheme()
   const dim = filled ? 40 : 44
   return (
     <Pressable
       onPress={onPress}
+      disabled={loading}
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ busy: !!loading }}
       hitSlop={4}
       style={({ pressed }) => [
         { width: dim, height: dim, borderRadius: dim / 2, alignItems: 'center', justifyContent: 'center' },
@@ -252,7 +257,7 @@ export function IconButton({
         pressed && { backgroundColor: c.divider },
       ]}
     >
-      <Icon name={name} size={size} color={color ?? c.text} />
+      {loading ? <ActivityIndicator size="small" color={color ?? c.text} /> : <Icon name={name} size={size} color={color ?? c.text} />}
     </Pressable>
   )
 }

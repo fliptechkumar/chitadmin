@@ -11,7 +11,7 @@ import { DenominationSheet } from '@/features/DenominationSheet'
 import { usePrinter } from '@/features/usePrinter'
 import { statementEscPos } from '@/lib/escpos'
 import { dLong, inr, MODE_LABEL, timeOf, titleCase } from '@/lib/format'
-import { shareHtmlAsPdf, statementHtml } from '@/lib/print'
+import { printErrorMessage, shareHtmlAsPdf, statementHtml } from '@/lib/print'
 import { useTheme } from '@/theme/theme'
 import { fs, radius, sp } from '@/theme/tokens'
 
@@ -23,6 +23,7 @@ export default function Statement() {
   const overview = useApi<Overview>('/api/v1/route/overview')
   const [denomOpen, setDenomOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [sharing, setSharing] = useState(false)
 
   const dn = overview.data?.denomination
   const counted = !!dn?.counted
@@ -58,20 +59,24 @@ export default function Statement() {
     try {
       await printer.print({ escpos: () => statementEscPos(data, header()), html })
     } catch (e) {
-      const msg = e instanceof Error ? e.message : ''
-      if (msg && !/cancel/i.test(msg)) toast(msg, 'error')
+      const msg = printErrorMessage(e)
+      if (msg) toast(msg, 'error')
     } finally {
       setBusy(false)
     }
   }
 
   async function share() {
-    if (!data) return
+    if (!data) return toast('The statement is still loading.', 'info')
+    if (sharing) return
+    setSharing(true)
     try {
-      await shareHtmlAsPdf(html(), 'Day statement')
+      await shareHtmlAsPdf(html(), `Day statement ${dLong(data.date)}`)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : ''
-      if (msg && !/cancel/i.test(msg)) toast(msg, 'error')
+      const msg = printErrorMessage(e)
+      if (msg) toast(msg, 'error')
+    } finally {
+      setSharing(false)
     }
   }
 
@@ -84,7 +89,7 @@ export default function Statement() {
         actions={
           <>
             <IconButton name="refresh" label="Refresh" onPress={() => { refresh(); overview.reload() }} />
-            <IconButton name="share" label="Share as PDF" onPress={share} />
+            <IconButton name="share" label="Share as PDF" onPress={share} loading={sharing} />
           </>
         }
       />

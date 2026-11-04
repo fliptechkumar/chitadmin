@@ -10,7 +10,7 @@ import { AppBar, Button, ErrorState, IconButton, KV, Pill, SkeletonCards, Sticky
 import { usePrinter } from '@/features/usePrinter'
 import { receiptEscPos } from '@/lib/escpos'
 import { dLong, inr, MODE_LABEL, timeOf, titleCase } from '@/lib/format'
-import { receiptHtml, shareHtmlAsPdf } from '@/lib/print'
+import { printErrorMessage, receiptHtml, shareHtmlAsPdf } from '@/lib/print'
 import { useTheme } from '@/theme/theme'
 import { fs, radius, shadow, sp } from '@/theme/tokens'
 
@@ -41,8 +41,8 @@ export default function ReceiptScreen() {
       else await shareHtmlAsPdf(receiptHtml(r, applied), `Receipt ${r.receiptNo}`)
     } catch (e) {
       // Cancelling the print dialog lands here on some phones; stay quiet.
-      const msg = e instanceof Error ? e.message : ''
-      if (msg && !/cancel/i.test(msg)) toast(msg, 'error')
+      const msg = printErrorMessage(e)
+      if (msg) toast(msg, 'error')
     } finally {
       setBusy(null)
     }
@@ -56,7 +56,7 @@ export default function ReceiptScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }}>
-      <AppBar title="Receipt" back actions={<IconButton name="share" label="Share receipt" onPress={() => run('share')} />} />
+      <AppBar title="Receipt" back actions={<IconButton name="share" label="Share receipt" onPress={() => run('share')} loading={busy === 'share'} />} />
       {error && !r ? (
         <ErrorState message={error.message} onRetry={refresh} />
       ) : loading || !r ? (

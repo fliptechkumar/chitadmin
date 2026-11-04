@@ -628,6 +628,17 @@
     .auth-pop { animation: auth-pop 420ms var(--ease-spring) both; }
 }
 
+/* ---- Landing hero ---------------------------------------------------- */
+
+@keyframes hero-pulse {
+    0%, 100% { opacity: 0.35; transform: scale(1); }
+    50% { opacity: 0.7; transform: scale(1.06); }
+}
+
+@layer components {
+    .hero-pulse { animation: hero-pulse 6s ease-in-out infinite; }
+}
+
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

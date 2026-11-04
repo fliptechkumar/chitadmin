@@ -79,8 +79,29 @@ export async function printHtml(html: string) {
   await Print.printAsync({ html })
 }
 
+/**
+ * Saves the page as a PDF and opens the phone's share sheet (WhatsApp, Drive,
+ * mail…). Where the share sheet cannot open, the PDF goes to the print dialog
+ * instead, which can also save or send it.
+ */
 export async function shareHtmlAsPdf(html: string, title: string) {
-  const { uri } = await Print.printToFileAsync({ html, width: 288 })
-  if (!(await Sharing.isAvailableAsync())) throw new Error('Sharing is not available on this phone.')
-  await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: title })
+  let uri: string
+  try {
+    ;({ uri } = await Print.printToFileAsync({ html, width: 288 }))
+  } catch (e) {
+    throw new Error(`Could not create the PDF. ${e instanceof Error ? e.message : ''}`.trim())
+  }
+  try {
+    if (!(await Sharing.isAvailableAsync())) throw new Error('unavailable')
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', UTI: 'com.adobe.pdf', dialogTitle: title })
+  } catch {
+    await Print.printAsync({ uri })
+  }
+}
+
+/** A message worth showing for a failed print or share; null when the user just backed out. */
+export function printErrorMessage(e: unknown): string | null {
+  const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : ''
+  if (/cancel|dismiss/i.test(msg)) return null
+  return msg || 'Something went wrong. Please try again.'
 }
