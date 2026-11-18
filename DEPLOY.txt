@@ -211,3 +211,45 @@ when it asks.
 
 Files used: deploy/setup-server.sh, deploy/update.sh, deploy/nginx.conf
 
+Michits Route Login
+
+Route 1
+Username :michits01
+Password :Mik@2026
+
+Route 2
+Username :michits02
+Password :Mik@2026
+
+Route 3
+Username :michits03
+Password :Mik@2026
+
+Route 4
+Username :michits04
+Password :Mik@2026
+
+Route 5
+Username :michits05
+Password :Mik@2026
+
+Route 6
+Username :michits06
+Password :Mik@2026
+
+Route 7
+Username :michits07
+Password :Mik@2026
+
+Route 8
+Username :michits08
+Password :Mik@2026
+
+Route 9
+Username :michits09
+Password :Mik@2026
+
+Route 10
+Username :michits10
+Password :Mik@2026
+

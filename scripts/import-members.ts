@@ -52,6 +52,7 @@ const COL = {
   chitValue: 10,
   currentDue: 13,
   staff: 15,
+  prizedDue: 16,
   prizedStatus: 17,
 } as const
 
@@ -69,6 +70,7 @@ const EXPECTED_HEADERS: Record<number, string> = {
   [COL.chitValue]: "Chit Value",
   [COL.currentDue]: "Current Due",
   [COL.staff]: "Staff",
+  [COL.prizedDue]: "Prized Due",
   [COL.prizedStatus]: "Prized Status",
 }
 
@@ -106,6 +108,8 @@ type SheetRow = {
   currentDue: number | null
   staff: string[]
   isPrized: boolean
+  /** The round a prized seat won, when the sheet gives one ("-" otherwise). */
+  prizedDue: number | null
 }
 
 /** A cell as trimmed text; ExcelJS hands back dates and formulas as objects. */
@@ -267,6 +271,9 @@ async function readSheets(dir: string): Promise<SheetRow[]> {
           .map((s) => s.trim())
           .filter(Boolean),
         isPrized: get(COL.prizedStatus).toLowerCase() === "prized",
+        prizedDue: Number.isInteger(Number(get(COL.prizedDue))) && Number(get(COL.prizedDue)) > 0
+          ? Number(get(COL.prizedDue))
+          : null,
       })
     }
   }
@@ -563,12 +570,23 @@ async function main() {
           continue
         }
 
+        // A prized seat is dated by its winning round's auction in this group.
+        const prizedDue = row.isPrized ? row.prizedDue : null
+        const round = prizedDue
+          ? await tx.auction.findUnique({
+              where: { groupId_installmentNo: { groupId, installmentNo: prizedDue } },
+              select: { auctionDate: true },
+            })
+          : null
+
         await tx.chitTicket.update({
           where: { id: seat.id },
           data: {
             applicantId: applicant.id,
             routeId: routeIdByCode.get(row.routeCode) ?? null,
             isPrized: row.isPrized,
+            prizedDue,
+            prizedOn: round?.auctionDate ?? null,
             status: "active",
           },
         })

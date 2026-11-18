@@ -523,6 +523,10 @@ model ChitTicket {
   /// but can no longer bid, so the dues register calls it out.
   isPrized   Boolean      @default(false)
   prizedOn   DateTime?
+  /// The round (due no) the seat was prized in. Auctions held here also name
+  /// the winner on the Auction row; this carries it for seats imported as
+  /// prized, whose winning round predates the system.
+  prizedDue  Int?
 
   dues       TicketDue[]
   collections Collection[]

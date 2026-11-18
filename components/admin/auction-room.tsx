@@ -338,7 +338,13 @@ function GroupMembers({
               >
                 <SeatNo no={member.ticketNo} />
                 <span className="min-w-0 flex-1 truncate text-sm">{member.name}</span>
-                <span className="tnum shrink-0 text-xs">won due {member.wonRound}</span>
+                <span className="tnum shrink-0 text-xs">
+                  {member.wonRound !== null
+                    ? `won due ${member.wonRound}${member.prizedOn ? ` · ${formatDay(member.prizedOn)}` : ""}`
+                    : member.prizedOn
+                      ? `prized ${formatDay(member.prizedOn)}`
+                      : "prized earlier"}
+                </span>
               </div>
             ))}
           </CardContent>

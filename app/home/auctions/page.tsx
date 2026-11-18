@@ -1,4 +1,4 @@
-import AuctionsTable from "@/components/admin/auctions-table"
+import AuctionsView from "@/components/admin/auctions-view"
 import { requireRole } from "@/lib/auth-server"
 import { prisma } from "@/lib/prisma"
 import { branchScope } from "@/lib/rbac"
@@ -25,11 +25,11 @@ export default async function AuctionsPage() {
       <div className="reveal" style={{ "--i": 0 } as React.CSSProperties}>
         <h2 className="text-lg font-semibold tracking-tight">Auctions</h2>
         <p className="mt-0.5 text-sm text-muted-foreground">
-          Rounds held and upcoming, with who took the pot and at what discount.
+          Rounds held and upcoming, and every prized member group by group.
         </p>
       </div>
 
-      <AuctionsTable branches={branches} groups={groups} />
+      <AuctionsView branches={branches} groups={groups} />
     </div>
   )
 }

@@ -44,10 +44,8 @@ export function receiptHtml(r: Receipt, applied?: { installmentNo: number; amoun
       ${row('Receipt no', r.receiptNo)}
       ${row('Date', `${dLong(r.date)}, ${timeOf(r.createdAt)}`)}
       ${row('Member', titleCase(r.name))}
-      ${r.accountNo ? row('Account no', r.accountNo) : ''}
       ${row('Group / Ticket', `${r.group} / ${r.ticketNo ?? '—'}`)}
       ${row('Instalment', months)}
-      ${row('Monthly due', inr(r.monthlyDue))}
       ${row('Balance pending', inr(r.balance))}
       ${r.route ? row('Route', `${r.route.code} ${r.route.name}`) : ''}
     </table><hr>
